@@ -84,27 +84,52 @@ function fileIcon(type) {
   return "📎";
 }
 
-function mediaPreviewHTML(uploads) {
+function mediaPreviewHTML(uploads, taskId) {
   if (!uploads || uploads.length === 0) return "";
-  return `<div class="media-grid">${uploads.map(u => {
+  return `<div class="media-grid">${uploads.map((u, idx) => {
+    const canDelete = cu.role === "admin" || u.uploadedById === cu.id;
+    const delBtn = canDelete
+      ? `<button class="del-file-btn" onclick="deleteUpload('${taskId}', ${idx})" title="Delete file">🗑️</button>`
+      : "";
     if (u.type?.startsWith("image")) {
       return `<div class="media-item">
-        <img src="${u.url}" onclick="openLightbox('${u.url}')" class="media-thumb" title="${u.name}">
+        <div class="media-item-top">
+          <img src="${u.url}" onclick="openLightbox('${u.url}')" class="media-thumb" title="${u.name}">
+          ${delBtn}
+        </div>
         <div class="media-meta">${u.uploadedBy} · ${fmt(u.uploadedAt)}</div>
       </div>`;
     } else if (u.type?.startsWith("video")) {
       return `<div class="media-item">
-        <video src="${u.url}" controls class="media-video"></video>
-        <div class="media-meta">${fileIcon(u.type)} ${u.name} · ${u.uploadedBy} · ${fmt(u.uploadedAt)}</div>
+        <div class="media-item-top" style="flex-direction:column;align-items:flex-start;">
+          <video src="${u.url}" controls class="media-video"></video>
+          <div style="display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:4px;">
+            <div class="media-meta">${fileIcon(u.type)} ${u.name} · ${u.uploadedBy} · ${fmt(u.uploadedAt)}</div>
+            ${delBtn}
+          </div>
+        </div>
       </div>`;
     } else {
       return `<div class="media-item media-doc">
-        <a href="${u.url}" target="_blank" class="doc-link">${fileIcon(u.type)} ${u.name}</a>
+        <div class="media-item-top">
+          <a href="${u.url}" target="_blank" class="doc-link">${fileIcon(u.type)} ${u.name}</a>
+          ${delBtn}
+        </div>
         <div class="media-meta">${u.uploadedBy} · ${fmt(u.uploadedAt)}</div>
       </div>`;
     }
   }).join("")}</div>`;
 }
+
+window.deleteUpload = async (taskId, idx) => {
+  if (!confirm("Remove this file from the task?")) return;
+  const t = (window._tasks||[]).find(x => x.id === taskId);
+  if (!t) return;
+  const newUploads = (t.uploads||[]).filter((_, i) => i !== idx);
+  await updateDoc(doc(db,"tasks",taskId), { uploads: newUploads });
+  await logAct(`${cu.name} removed a file from: "${t.title}"`, "delete", taskId);
+  toast("File removed ✓", "success");
+};
 
 window.openLightbox = url => {
   $("lightbox-img").src = url;
@@ -413,7 +438,7 @@ function poolCard(t){
       </div>${adminBtns}
     </div>
     <div class="task-actions" style="margin-top:12px;">${actions}</div>
-    ${mediaPreviewHTML(t.uploads)}
+    ${mediaPreviewHTML(t.uploads, t.id)}
   </div>`;
 }
 
@@ -451,7 +476,7 @@ function privateCard(t){
       ${action}
       ${uploadBtn(t.id)}
     </div>
-    ${mediaPreviewHTML(t.uploads)}
+    ${mediaPreviewHTML(t.uploads, t.id)}
   </div>`;
 }
 
@@ -512,7 +537,7 @@ function adminCard(t){
         <button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')">Del</button>
       </div>
     </div>
-    ${mediaPreviewHTML(t.uploads)}
+    ${mediaPreviewHTML(t.uploads, t.id)}
   </div>`;
 }
 
@@ -532,7 +557,7 @@ function fullTaskCard(t, tagCls, tagLabel, actions){
       </div>
     </div>
     <div class="task-actions" style="margin-top:12px;">${actions}</div>
-    ${mediaPreviewHTML(t.uploads)}
+    ${mediaPreviewHTML(t.uploads, t.id)}
   </div>`;
 }
 
@@ -857,6 +882,9 @@ select option{background:#0d0f16;}
 .doc-link{color:var(--cyan);font-size:.84rem;text-decoration:none;font-family:'Inter',sans-serif;}
 .doc-link:hover{text-decoration:underline;}
 .media-meta{font-size:.68rem;color:var(--muted);font-family:'Inter',sans-serif;}
+.media-item-top{position:relative;display:flex;align-items:flex-start;}
+.del-file-btn{position:absolute;top:4px;right:4px;background:rgba(255,75,110,.85);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:.75rem;padding:3px 6px;line-height:1;transition:all .2s;}
+.del-file-btn:hover{background:var(--red);transform:scale(1.1);}
 /* UPLOAD MODAL */
 .upload-zone{border:2px dashed rgba(0,229,255,.3);border-radius:14px;padding:32px 20px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px;}
 .upload-zone:hover{border-color:var(--cyan);background:rgba(0,229,255,.03);}
