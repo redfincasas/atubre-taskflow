@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -265,6 +266,11 @@ function subscribeAll(){
 
 // ── NAV ───────────────────────────────────────────
 window.showPage = name => {
+  // Block members from admin-only pages
+  const adminPages = ["private","activity","all-tasks","team"];
+  if(cu && cu.role==="member" && adminPages.includes(name)) {
+    toast("Access restricted to admins only","error"); return;
+  }
   document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
   document.querySelectorAll(".nav-item").forEach(n=>n.classList.remove("active"));
   const pg=$("page-"+name); if(pg) pg.classList.add("active");
@@ -307,7 +313,8 @@ function miniCard(t){
   const tl={assigned:"Assigned",pool:"Pool",private:"🔒 Private"}[t.type]||t.type;
   const sc={pending:"tag-gray",accepted:"tag-gold",completed:"tag-green"}[t.status];
   const uploads=(t.uploads||[]).length;
-  return `<div class="task-card">
+  const dest={assigned:cu.role==="admin"?"all-tasks":"my-tasks",pool:"pool",private:cu.role==="admin"?"private":"dashboard"}[t.type]||"dashboard";
+  return `<div class="task-card" style="cursor:pointer;" onclick="showPage('${dest}')">
     <div class="task-priority pri-${t.priority||"low"}"></div>
     <div class="task-body">
       <div class="task-title">${t.title}</div>
@@ -318,6 +325,7 @@ function miniCard(t){
         ${t.due?`<span class="task-date">📅 ${t.due}</span>`:""}
       </div>
     </div>
+    <div style="color:var(--muted);font-size:.8rem;">›</div>
   </div>`;
 }
 
@@ -715,6 +723,25 @@ async function logAct(msg,type,taskId){
 }
 
 window.closeModal=id=>document.getElementById(id).classList.remove("open");
+
+// Mobile nav
+window.toggleMobileNav = () => {
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('mobile-overlay');
+  sidebar.classList.toggle('mobile-open');
+  overlay.classList.toggle('open');
+};
+window.closeMobileNav = () => {
+  document.querySelector('.sidebar').classList.remove('mobile-open');
+  document.getElementById('mobile-overlay').classList.remove('open');
+};
+
+// Close mobile nav when a nav item is clicked
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    if (window.innerWidth <= 700) closeMobileNav();
+  });
+});
 document.addEventListener("click",e=>{
   if(!e.target.closest("#notif-panel")&&!e.target.closest("#notif-btn")) closeNotifPanel();
 });
@@ -883,7 +910,22 @@ select option{background:#0d0f16;}
 .lightbox.open{display:flex;}
 .lightbox img{max-width:90vw;max-height:90vh;border-radius:12px;border:1px solid rgba(0,229,255,.3);}
 .lightbox-close{position:absolute;top:20px;right:24px;color:var(--cyan);font-size:2rem;cursor:pointer;font-family:'Orbitron',sans-serif;}
-@media(max-width:700px){.stats-row{grid-template-columns:1fr 1fr;}.sidebar{display:none;}.form-row{grid-template-columns:1fr;}.content{padding:16px;}.topbar{padding:0 14px;}.logo{font-size:.78rem;}}
+@media(max-width:700px){
+  .stats-row{grid-template-columns:1fr 1fr;}
+  .sidebar{display:none;}
+  .sidebar.mobile-open{display:flex;position:fixed;top:62px;left:0;bottom:0;z-index:90;width:240px;overflow-y:auto;box-shadow:4px 0 30px rgba(0,0,0,.8);}
+  .mobile-overlay{display:none;position:fixed;inset:0;top:62px;background:rgba(0,0,0,.7);z-index:89;}
+  .mobile-overlay.open{display:block;}
+  .form-row{grid-template-columns:1fr;}
+  .content{padding:16px;}
+  .topbar{padding:0 14px;}
+  .logo{font-size:.75rem;}
+  .user-chip span{display:none;}
+  .notif-panel{width:calc(100vw - 32px);right:16px;}
+  .hamburger{display:flex !important;}
+}
+.hamburger{display:none;background:transparent;border:1px solid rgba(0,229,255,.2);border-radius:9px;width:38px;height:38px;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem;color:var(--cyan);transition:all .2s;}
+.hamburger:hover{border-color:var(--cyan);box-shadow:0 0 14px rgba(0,229,255,.2);}
 </style>
 </head>
 <body>
@@ -920,6 +962,7 @@ select option{background:#0d0f16;}
 <div id="app-screen">
   <div class="topbar">
     <div class="topbar-left">
+      <button class="hamburger" onclick="toggleMobileNav()" id="hamburger-btn">☰</button>
       <div class="logo">ATUBRE TASK FLOW</div>
       <span class="role-badge" id="role-badge"></span>
     </div>
@@ -929,6 +972,8 @@ select option{background:#0d0f16;}
       <button class="btn btn-ghost btn-sm" onclick="handleLogout()">Log Out</button>
     </div>
   </div>
+
+  <div class="mobile-overlay" id="mobile-overlay" onclick="closeMobileNav()"></div>
 
   <div class="notif-panel" id="notif-panel">
     <h4>NOTIFICATIONS <span onclick="clearNotifications()" style="font-size:.68rem;color:var(--muted);cursor:pointer;font-weight:400;font-family:'Inter',sans-serif;">Clear all</span></h4>
@@ -948,12 +993,12 @@ select option{background:#0d0f16;}
         <span class="nav-icon">🌊</span>Open Pool
         <span class="nav-count" id="nav-pool-badge" style="display:none"></span>
       </button>
-      <button class="nav-item" onclick="showPage('private')" id="nav-private"><span class="nav-icon">🔒</span>Private</button>
+      <button class="nav-item admin-only" onclick="showPage('private')" id="nav-private"><span class="nav-icon">🔒</span>Private</button>
       <button class="nav-item admin-only" onclick="showPage('all-tasks')" id="nav-all-tasks"><span class="nav-icon">📋</span>All Tasks</button>
       <button class="nav-item admin-only" onclick="openCreateTask()"><span class="nav-icon">＋</span>New Task</button>
       <div class="nav-section">Team</div>
       <button class="nav-item admin-only" onclick="showPage('team')" id="nav-team"><span class="nav-icon">👥</span>Team</button>
-      <button class="nav-item" onclick="showPage('activity')" id="nav-activity"><span class="nav-icon">🗂</span>Activity Log</button>
+      <button class="nav-item admin-only" onclick="showPage('activity')" id="nav-activity"><span class="nav-icon">🗂</span>Activity Log</button>
     </div>
 
     <div class="content">
