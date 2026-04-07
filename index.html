@@ -317,12 +317,33 @@ function subscribeAll(){
   unsubs.push(onSnapshot(query(collection(db,"tasks"),orderBy("createdAt","desc")), snap=>{
     window._tasks=snap.docs.map(d=>({id:d.id,...d.data()}));
     renderPage(currentPage);
+    // Update private badge — incomplete private tasks owned by or shared with me
+    if(cu.role==="admin"){
+      const privatePending=(window._tasks||[]).filter(t=>
+        t.type==="private" &&
+        t.status!=="completed" &&
+        (t.ownerId===cu.id||(t.sharedWith||[]).includes(cu.id))
+      ).length;
+      const pb=$("nav-private-badge");
+      if(pb){ pb.textContent=privatePending; pb.style.display=privatePending>0?"":"none"; }
+    }
   }));
   unsubs.push(onSnapshot(query(collection(db,"notifications"),
     where("recipientId","==",cu.id),orderBy("createdAt","desc")), snap=>{
     window._notifs=snap.docs.map(d=>({id:d.id,...d.data()}));
     $("notif-dot").style.display=window._notifs.filter(n=>!n.read).length>0?"":"none";
   }));
+  // Watch pending user registrations (admin only)
+  if(cu.role==="admin"){
+    unsubs.push(onSnapshot(query(collection(db,"users"),where("approved","==",false)), snap=>{
+      const pending=snap.docs.filter(d=>d.data().role!=="admin").length;
+      const badge=$("nav-team-badge");
+      if(badge){
+        badge.textContent=pending;
+        badge.style.display=pending>0?"":"none";
+      }
+    }));
+  }
 }
 
 // ── NAV ───────────────────────────────────────────
@@ -1142,11 +1163,17 @@ select option{background:#0d0f16;}
         <span class="nav-icon">🌊</span>Open Pool
         <span class="nav-count" id="nav-pool-badge" style="display:none"></span>
       </button>
-      <button class="nav-item admin-only" onclick="showPage('private')" id="nav-private"><span class="nav-icon">🔒</span>Private</button>
+      <button class="nav-item admin-only" onclick="showPage('private')" id="nav-private">
+        <span class="nav-icon">🔒</span>Private
+        <span class="nav-count" id="nav-private-badge" style="display:none;background:var(--purple);color:#000;"></span>
+      </button>
       <button class="nav-item admin-only" onclick="showPage('all-tasks')" id="nav-all-tasks"><span class="nav-icon">📋</span>All Tasks</button>
       <button class="nav-item admin-only" onclick="openCreateTask()"><span class="nav-icon">＋</span>New Task</button>
       <div class="nav-section">Team</div>
-      <button class="nav-item admin-only" onclick="showPage('team')" id="nav-team"><span class="nav-icon">👥</span>Team</button>
+      <button class="nav-item admin-only" onclick="showPage('team')" id="nav-team">
+        <span class="nav-icon">👥</span>Team
+        <span class="nav-count" id="nav-team-badge" style="display:none;background:var(--red);"></span>
+      </button>
       <button class="nav-item admin-only" onclick="showPage('activity')" id="nav-activity"><span class="nav-icon">🗂</span>Activity Log</button>
     </div>
 
