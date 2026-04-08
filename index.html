@@ -321,12 +321,23 @@ function subscribeAll(){
     if(cu.role==="admin"){
       const privatePending=(window._tasks||[]).filter(t=>
         t.type==="private" &&
-        t.status!=="completed" &&
+        t.status==="pending" &&
+        !(t.privateAcceptedBy||[]).find(a=>a.uid===cu.id) &&
         (t.ownerId===cu.id||(t.sharedWith||[]).includes(cu.id))
       ).length;
       const pb=$("nav-private-badge");
       if(pb){ pb.textContent=privatePending; pb.style.display=privatePending>0?"":"none"; }
     }
+    // Update in-progress badge for all users
+    const uid=cu.id;
+    const inProgressCount=(window._tasks||[]).filter(t=>{
+      if(t.type==="assigned") return (t.acceptedBy||[]).find(a=>a.uid===uid)&&!(t.completedBy||[]).find(c=>c.uid===uid);
+      if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===uid&&!c.completedAt);
+      if(t.type==="private"&&cu.role==="admin") return (t.privateAcceptedBy||[]).find(a=>a.uid===uid)&&!(t.privateCompletedBy||[]).find(c=>c.uid===uid);
+      return false;
+    }).length;
+    const ipb=$("nav-inprogress-badge");
+    if(ipb){ ipb.textContent=inProgressCount; ipb.style.display=inProgressCount>0?"":"none"; }
   }));
   unsubs.push(onSnapshot(query(collection(db,"notifications"),
     where("recipientId","==",cu.id),orderBy("createdAt","desc")), snap=>{
@@ -376,6 +387,7 @@ function renderPage(name){
   const T=applyPriorityFilter(window._tasks||[]);
   if(name==="dashboard") renderDashboard(window._tasks||[]); // dashboard shows all for counts
   if(name==="my-tasks")  renderMyTasks(T);
+  if(name==="in-progress") renderInProgress(T);
   if(name==="pool")      renderPool(T);
   if(name==="private")   renderPrivate(T);
   if(name==="all-tasks") renderAllTasks(T);
@@ -391,16 +403,30 @@ function renderDashboard(T){
   const isA=cu.role==="admin";
   const vis=T.filter(t=>isA||(t.assignees||[]).includes(cu.id)||t.type==="pool"||
     (t.type==="private"&&(t.ownerId===cu.id||(t.sharedWith||[]).includes(cu.id))));
+  const completedCount=vis.filter(t=>t.status==="completed").length;
+  const pendingCount=vis.filter(t=>t.status==="pending").length;
+  const inProgressCount=vis.filter(t=>t.status==="accepted").length;
   $("stats-row").innerHTML=`
     <div class="stat-card cyan"><div class="stat-num">${vis.length}</div><div class="stat-label">Total Tasks</div></div>
-    <div class="stat-card gold"><div class="stat-num">${vis.filter(t=>t.status==="pending").length}</div><div class="stat-label">Pending</div></div>
-    <div class="stat-card blue"><div class="stat-num">${vis.filter(t=>t.status==="accepted").length}</div><div class="stat-label">In Progress</div></div>
-    <div class="stat-card green"><div class="stat-num">${vis.filter(t=>t.status==="completed").length}</div><div class="stat-label">Completed</div></div>`;
+    <div class="stat-card gold"><div class="stat-num">${pendingCount}</div><div class="stat-label">Pending</div></div>
+    <div class="stat-card blue"><div class="stat-num">${inProgressCount}</div><div class="stat-label">In Progress</div></div>
+    <div class="stat-card green ${cu.role==='admin'?'clickable-stat':''}" ${cu.role==='admin'?'onclick="openCompletedReport()" title="Click to view completion report"':''}>
+      <div class="stat-num">${completedCount}</div>
+      <div class="stat-label">Completed</div>
+      ${cu.role==='admin'?'<div style="font-size:.65rem;color:var(--green);margin-top:4px;font-family:Orbitron,sans-serif;letter-spacing:.05em;">TAP TO VIEW ›</div>':''}
+    </div>`;
   $("dash-recent").innerHTML=vis.slice(0,5).map(t=>miniCard(t)).join("")||empty("📭","No tasks yet");
   const myOpen=T.filter(t=>(t.assignees||[]).includes(cu.id)&&t.status!=="completed").length;
-  const poolOpen=T.filter(t=>t.type==="pool"&&t.status==="pending").length;
+  const poolOpen=T.filter(t=>t.type==="pool"&&t.status==="pending"&&!(t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt)).length;
+  const myInProgress=T.filter(t=>{
+    if(t.type==="assigned") return (t.acceptedBy||[]).find(a=>a.uid===cu.id)&&!(t.completedBy||[]).find(c=>c.uid===cu.id);
+    if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt);
+    return false;
+  }).length;
   $("nav-my-badge").textContent=myOpen; $("nav-my-badge").style.display=myOpen>0?"":"none";
   $("nav-pool-badge").textContent=poolOpen; $("nav-pool-badge").style.display=poolOpen>0?"":"none";
+  const ipb=$("nav-inprogress-badge");
+  if(ipb){ ipb.textContent=myInProgress; ipb.style.display=myInProgress>0?"":"none"; }
 }
 
 function miniCard(t){
@@ -460,10 +486,60 @@ function assignedCard(t){
   return fullTaskCard(t,"tag-cyan","👤 Assigned to you",actions);
 }
 
+// ── IN PROGRESS ───────────────────────────────────
+function renderInProgress(T){
+  const uid=cu.id;
+  // Assigned tasks accepted by me but not completed
+  const assignedInProgress=T.filter(t=>
+    t.type==="assigned" &&
+    (t.acceptedBy||[]).find(a=>a.uid===uid) &&
+    !(t.completedBy||[]).find(c=>c.uid===uid)
+  );
+  // Pool tasks claimed by me but not completed
+  const poolInProgress=T.filter(t=>
+    t.type==="pool" &&
+    (t.claims||[]).find(c=>c.uid===uid&&!c.completedAt)
+  );
+  // Private tasks started but not completed (admin only)
+  const privateInProgress=cu.role==="admin"?T.filter(t=>
+    t.type==="private" &&
+    (t.privateAcceptedBy||[]).find(a=>a.uid===uid) &&
+    !(t.privateCompletedBy||[]).find(c=>c.uid===uid)
+  ):[];
+  const all=[...assignedInProgress,...poolInProgress,...privateInProgress];
+  if(!all.length){
+    $("inprogress-list").innerHTML=empty("⚡","No tasks in progress — claim a task from the Open Pool or accept an assigned task");
+    return;
+  }
+  $("inprogress-list").innerHTML=all.map(t=>{
+    const isAssigned=t.type==="assigned";
+    const isPrivate=t.type==="private";
+    const accepted=isAssigned?(t.acceptedBy||[]).find(a=>a.uid===uid):null;
+    const claim=t.type==="pool"?(t.claims||[]).find(c=>c.uid===uid):null;
+    const privAccepted=isPrivate?(t.privateAcceptedBy||[]).find(a=>a.uid===uid):null;
+    const startTime=accepted?.startedAt||claim?.startedAt||privAccepted?.startedAt;
+    const completeAction=isAssigned?`completeTask('${t.id}')`:isPrivate?`completePrivate('${t.id}')`:`completePool('${t.id}')`;
+    const tagCls=isAssigned?"tag-cyan":isPrivate?"tag-purple":"tag-gold";
+    const tagLabel=isAssigned?"👤 Assigned":isPrivate?"🔒 Private":"🌊 Pool";
+    const actions=`
+      <div class="time-stamp">⏱ Started: ${fmt(startTime)}</div>
+      <div class="btn-row">
+        <button class="btn btn-green btn-sm" onclick="${completeAction}">✅ Mark Complete</button>
+        <button class="btn btn-ghost btn-sm" onclick="openUploadModal('${t.id}')">📎 Upload File</button>
+      </div>`;
+    return fullTaskCard(t, tagCls, tagLabel, actions);
+  }).join("");
+}
+
 // ── POOL ──────────────────────────────────────────
 function renderPool(T){
-  const pool=T.filter(t=>t.type==="pool");
-  $("pool-list").innerHTML=pool.length?pool.map(t=>poolCard(t)).join(""):empty("🌊","No open pool tasks right now");
+  const uid=cu.id;
+  // Hide tasks the current user has already claimed (they go to In Progress)
+  const pool=T.filter(t=>
+    t.type==="pool" &&
+    !(t.claims||[]).find(c=>c.uid===uid&&!c.completedAt)
+  );
+  $("pool-list").innerHTML=pool.length?pool.map(t=>poolCard(t)).join(""):empty("🌊","No available pool tasks — check In Progress for your active tasks");
 }
 
 function poolCard(t){
@@ -514,28 +590,39 @@ function poolCard(t){
 
 // ── PRIVATE ───────────────────────────────────────
 function renderPrivate(T){
-  const mine=T.filter(t=>t.type==="private"&&(t.ownerId===cu.id||(t.sharedWith||[]).includes(cu.id)));
-  const active=mine.filter(t=>t.status!=="completed");
-  const done=mine.filter(t=>t.status==="completed");
+  const uid=cu.id;
+  const mine=T.filter(t=>t.type==="private"&&(t.ownerId===uid||(t.sharedWith||[]).includes(uid)));
+  // Pending = not yet started by me
+  const pending=mine.filter(t=>t.status==="pending"&&!(t.privateAcceptedBy||[]).find(a=>a.uid===uid));
+  // In progress = started by me but not done
+  const inProg=mine.filter(t=>(t.privateAcceptedBy||[]).find(a=>a.uid===uid)&&!(t.privateCompletedBy||[]).find(c=>c.uid===uid));
   let html="";
-  if(active.length>0){
-    html+=`<div class="section-title">Active (${active.length})</div>`;
-    html+=active.map(t=>privateCard(t)).join("");
+  if(pending.length>0){
+    html+=`<div class="section-title">Pending (${pending.length})</div>`;
+    html+=pending.map(t=>privateCard(t)).join("");
   }
-  if(done.length>0){
-    html+=`<div class="section-title" style="margin-top:20px;">Completed (${done.length})</div>`;
-    html+=done.map(t=>privateCard(t)).join("");
+  if(inProg.length>0){
+    html+=`<div class="section-title" style="margin-top:20px;">⚡ In Progress (${inProg.length})</div>`;
+    html+=inProg.map(t=>privateCard(t)).join("");
   }
   $("private-list").innerHTML=html||empty("🔒","No private tasks yet — create your first one above");
 }
 
 function privateCard(t){
-  const isOwner=t.ownerId===cu.id;
-  const done=t.status==="completed";
-  let action=done
-    ?`<span class="tag tag-green">✓ Done ${t.completedAt?"— "+fmt(t.completedAt):""}</span>`
-    :`<button class="btn btn-green btn-sm" onclick="completePrivate('${t.id}')">✅ Mark Done</button>`;
-  return `<div class="task-accept-card${done?" opacity-done":""}">
+  const uid=cu.id;
+  const isOwner=t.ownerId===uid;
+  const accepted=(t.privateAcceptedBy||[]).find(a=>a.uid===uid);
+  const completed=(t.privateCompletedBy||[]).find(c=>c.uid===uid);
+  let action="";
+  if(!accepted&&!completed)
+    action=`<button class="btn btn-gold btn-sm" onclick="startPrivate('${t.id}')">⚡ Start Task</button>`;
+  else if(accepted&&!completed)
+    action=`<div class="time-stamp">⏱ Started: ${fmt(accepted.startedAt)}</div>
+            <div class="btn-row">
+              <button class="btn btn-green btn-sm" onclick="completePrivate('${t.id}')">✅ Mark Done</button>
+              ${uploadBtn(t.id)}
+            </div>`;
+  return `<div class="task-accept-card">
     <div class="task-card-top">
       <div style="flex:1;">
         <div class="task-title">${t.title}</div>
@@ -553,10 +640,7 @@ function privateCard(t){
         <button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')">Del</button>
       </div>`:""}
     </div>
-    <div class="task-actions" style="margin-top:10px;">
-      ${action}
-      ${uploadBtn(t.id)}
-    </div>
+    <div class="task-actions" style="margin-top:10px;">${action}</div>
     ${mediaPreviewHTML(t.uploads, t.id)}
   </div>`;
 }
@@ -682,11 +766,28 @@ window.completePool = async id => {
   toast("Pool task complete! ✅","success");
 };
 
+window.startPrivate = async id => {
+  const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
+  if((t.privateAcceptedBy||[]).find(a=>a.uid===cu.id)) return;
+  const entry={uid:cu.id,name:cu.name,startedAt:Timestamp.now()};
+  await updateDoc(doc(db,"tasks",id),{
+    privateAcceptedBy:[...(t.privateAcceptedBy||[]),entry],
+    status:"accepted"
+  });
+  await logAct(`${cu.name} started private task: "${t.title}"`, "accept", id);
+  toast("Private task started! ⚡","success");
+};
+
 window.completePrivate = async id => {
   const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
-  await updateDoc(doc(db,"tasks",id),{status:"completed",completedAt:Timestamp.now()});
+  const entry={uid:cu.id,name:cu.name,completedAt:Timestamp.now()};
+  await updateDoc(doc(db,"tasks",id),{
+    privateCompletedBy:[...(t.privateCompletedBy||[]),entry],
+    status:"completed",
+    completedAt:Timestamp.now()
+  });
   await logAct(`${cu.name} completed private task: "${t.title}"`, "complete", id);
-  toast("Done ✅","success");
+  toast("Private task done ✅","success");
 };
 
 window.deleteTask = async id => {
@@ -838,6 +939,96 @@ window.saveTask = async () => {
   } catch(e){ toast("Error: "+e.message,"error"); }
   $("save-task-btn").textContent=editingTaskId?"Save Changes":"Create Task";
 };
+
+// ── COMPLETED REPORT ──────────────────────────────
+window.openCompletedReport = () => {
+  if(cu.role!=="admin"){ toast("Completion report is for admins only","error"); return; }
+  const T = window._tasks || [];
+  const isAdmin = true;
+  // Admins see ALL completed tasks including private
+  const completed = T.filter(t => t.status === "completed");
+
+  if (!completed.length) {
+    $("report-body").innerHTML = empty("🎉","No completed tasks yet");
+    $("report-modal").classList.add("open");
+    return;
+  }
+
+  // Sort by most recently completed
+  const sorted = [...completed].sort((a,b) => {
+    const aTime = getCompletedTime(a);
+    const bTime = getCompletedTime(b);
+    if (!aTime) return 1; if (!bTime) return -1;
+    return bTime.seconds - aTime.seconds;
+  });
+
+  $("report-body").innerHTML = sorted.map(t => {
+    const typeLabel = {assigned:"👤 Assigned",pool:"🌊 Pool",private:"🔒 Private"}[t.type]||t.type;
+    const typeCls   = {assigned:"tag-cyan",pool:"tag-gold",private:"tag-purple"}[t.type]||"tag-gray";
+
+    // Build who completed it and when
+    let completions = "";
+    if (t.type==="assigned" && (t.completedBy||[]).length>0) {
+      completions = t.completedBy.map(c=>`
+        <div class="report-entry">
+          <div class="report-who">
+            <div class="mini-avatar">${ini(c.name||"?")}</div>
+            <strong>${c.name||"Unknown"}</strong>
+          </div>
+          <div class="report-time">✅ Completed: ${fmt(c.completedAt)}</div>
+          ${t.acceptedBy?.find(a=>a.uid===c.uid)?`<div class="report-time">⚡ Started: ${fmt(t.acceptedBy.find(a=>a.uid===c.uid).startedAt)}</div>`:""}
+        </div>`).join("");
+    } else if (t.type==="pool" && (t.claims||[]).length>0) {
+      completions = t.claims.filter(c=>c.completedAt).map(c=>`
+        <div class="report-entry">
+          <div class="report-who">
+            <div class="mini-avatar">${ini(c.name||"?")}</div>
+            <strong>${c.name||"Unknown"}</strong>
+          </div>
+          <div class="report-time">⚡ Started: ${fmt(c.startedAt)}</div>
+          <div class="report-time">✅ Completed: ${fmt(c.completedAt)}</div>
+        </div>`).join("");
+    } else if (t.type==="private") {
+      if((t.privateCompletedBy||[]).length>0){
+        completions = t.privateCompletedBy.map(c=>`
+          <div class="report-entry">
+            <div class="report-who">
+              <div class="mini-avatar" style="background:var(--purple);color:#fff;">${ini(c.name||"?")}</div>
+              <strong>${c.name||"Unknown"}</strong>
+            </div>
+            ${t.privateAcceptedBy?.find(a=>a.uid===c.uid)?`<div class="report-time">⚡ Started: ${fmt(t.privateAcceptedBy.find(a=>a.uid===c.uid).startedAt)}</div>`:""}
+            <div class="report-time">✅ Completed: ${fmt(c.completedAt)}</div>
+          </div>`).join("");
+      } else {
+        completions=`<div class="report-entry"><div class="report-time">✅ Completed: ${fmt(t.completedAt)}</div></div>`;
+      }
+    }
+
+    const uploads = (t.uploads||[]).length;
+    return `<div class="report-card">
+      <div class="report-card-header">
+        <div>
+          <div class="report-title">${t.title}</div>
+          <div class="task-meta" style="margin-top:6px;">
+            <span class="tag ${typeCls}">${typeLabel}</span>
+            ${t.tag?`<span class="tag tag-soft">${t.tag}</span>`:""}
+            ${uploads>0?`<span class="tag tag-cyan">📎 ${uploads} file(s)</span>`:""}
+          </div>
+        </div>
+      </div>
+      ${completions}
+    </div>`;
+  }).join("");
+
+  $("report-modal").classList.add("open");
+};
+
+function getCompletedTime(t) {
+  if (t.type==="assigned" && (t.completedBy||[]).length>0) return t.completedBy[0].completedAt;
+  if (t.type==="pool" && (t.claims||[]).find(c=>c.completedAt)) return t.claims.find(c=>c.completedAt).completedAt;
+  if (t.type==="private" && t.completedAt) return t.completedAt;
+  return null;
+}
 
 // ── NOTIFICATIONS ─────────────────────────────────
 async function notifyAdmins(msg,type,taskId){
@@ -1062,6 +1253,15 @@ select option{background:#0d0f16;}
 .pri-filter-btn.active.medium{background:rgba(255,193,7,.1);color:var(--gold);}
 .pri-filter-btn.active.low{background:rgba(0,255,179,.1);color:var(--green);}
 @media(max-width:900px){.pri-filter-panel{display:none;}}
+/* REPORT MODAL */
+.clickable-stat{cursor:pointer;transition:all .2s;}
+.clickable-stat:hover{border-color:var(--green);box-shadow:0 0 20px rgba(0,255,179,.15);transform:translateY(-2px);}
+.report-card{background:var(--card);border:1px solid rgba(0,229,255,.1);border-radius:14px;padding:16px 18px;margin-bottom:12px;}
+.report-card-header{margin-bottom:10px;}
+.report-title{font-weight:600;font-size:.95rem;margin-bottom:4px;}
+.report-entry{background:rgba(0,229,255,.04);border-radius:10px;padding:10px 12px;margin-top:8px;border-left:3px solid var(--green);}
+.report-who{display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:.88rem;}
+.report-time{font-size:.76rem;color:var(--soft);margin-top:3px;font-family:'Inter',sans-serif;}
 /* LIGHTBOX */
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:300;display:none;align-items:center;justify-content:center;}
 .lightbox.open{display:flex;}
@@ -1159,6 +1359,10 @@ select option{background:#0d0f16;}
         <span class="nav-icon">🎯</span>My Tasks
         <span class="nav-count cyan" id="nav-my-badge" style="display:none"></span>
       </button>
+      <button class="nav-item" onclick="showPage('in-progress')" id="nav-in-progress">
+        <span class="nav-icon">⚡</span>In Progress
+        <span class="nav-count" id="nav-inprogress-badge" style="display:none;background:var(--cyan);color:#000;"></span>
+      </button>
       <button class="nav-item" onclick="showPage('pool')" id="nav-pool">
         <span class="nav-icon">🌊</span>Open Pool
         <span class="nav-count" id="nav-pool-badge" style="display:none"></span>
@@ -1191,9 +1395,16 @@ select option{background:#0d0f16;}
         <div id="my-tasks-list"></div>
       </div>
 
+      <div class="page" id="page-in-progress">
+        <div class="page-header">
+          <div><div class="page-title">⚡ In Progress</div><div class="page-sub">Tasks you have claimed and are currently working on</div></div>
+        </div>
+        <div id="inprogress-list"></div>
+      </div>
+
       <div class="page" id="page-pool">
         <div class="page-header">
-          <div><div class="page-title">🌊 Open Pool</div><div class="page-sub">Claim any task · upload proof · mark complete</div></div>
+          <div><div class="page-title">🌊 Open Pool</div><div class="page-sub">Available tasks — claim one to start working</div></div>
           <button class="btn btn-gold btn-sm admin-only" onclick="openCreateTask('pool')">＋ Add Pool Task</button>
         </div>
         <div id="pool-list"></div>
@@ -1326,6 +1537,17 @@ select option{background:#0d0f16;}
       <button class="btn btn-ghost btn-sm" onclick="closeModal(&#39;upload-modal&#39;)">Cancel</button>
       <button class="btn btn-green btn-sm" onclick="handleUpload()" id="upload-btn">⬆ Upload</button>
     </div>
+  </div>
+</div>
+
+<!-- COMPLETED REPORT MODAL -->
+<div class="modal-overlay" id="report-modal">
+  <div class="modal" style="width:600px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;">
+      <h3 style="margin:0;">✅ COMPLETION REPORT</h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('report-modal')">✕ Close</button>
+    </div>
+    <div id="report-body"></div>
   </div>
 </div>
 
