@@ -1030,6 +1030,137 @@ function getCompletedTime(t) {
   return null;
 }
 
+window.downloadPDFReport = () => {
+  const T = window._tasks || [];
+  const completed = T.filter(t => t.status === "completed");
+  const sorted = [...completed].sort((a,b) => {
+    const aT = getCompletedTime(a), bT = getCompletedTime(b);
+    if(!aT) return 1; if(!bT) return -1;
+    return bT.seconds - aT.seconds;
+  });
+
+  const now = new Date().toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
+
+  let html = `
+    <!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Atubre Task Flow — Completion Report</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a2e; background: #fff; padding: 30px; }
+      .header { border-bottom: 3px solid #00b4d8; padding-bottom: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; }
+      .header h1 { font-size: 20px; color: #00b4d8; letter-spacing: 1px; }
+      .header .meta { font-size: 10px; color: #666; text-align: right; }
+      .summary { display: flex; gap: 16px; margin-bottom: 24px; }
+      .summary-box { flex: 1; background: #f0f9ff; border: 1px solid #00b4d8; border-radius: 8px; padding: 12px; text-align: center; }
+      .summary-box .num { font-size: 24px; font-weight: 900; color: #00b4d8; }
+      .summary-box .lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; margin-top: 2px; }
+      .task-block { border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 16px; overflow: hidden; page-break-inside: avoid; }
+      .task-header { background: #f8f9fa; padding: 12px 14px; border-bottom: 1px solid #e0e0e0; }
+      .task-title { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
+      .task-desc { font-size: 11px; color: #555; margin-top: 4px; line-height: 1.5; }
+      .task-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+      .tag { font-size: 9px; padding: 2px 8px; border-radius: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+      .tag-assigned { background: #e0f7ff; color: #0077a8; }
+      .tag-pool { background: #fff8e1; color: #b8860b; }
+      .tag-private { background: #f3e8ff; color: #7b2d8b; }
+      .tag-cat { background: #f0f0f0; color: #555; }
+      .tag-pri-high { background: #ffebee; color: #c62828; }
+      .tag-pri-medium { background: #fff8e1; color: #b8860b; }
+      .tag-pri-low { background: #e8f5e9; color: #2e7d32; }
+      .task-body { padding: 12px 14px; }
+      .person-row { background: #f8fff8; border: 1px solid #c8e6c9; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; }
+      .person-name { font-weight: 700; font-size: 12px; color: #1a1a2e; margin-bottom: 4px; }
+      .time-row { font-size: 11px; color: #444; margin-top: 3px; }
+      .time-row span { font-weight: 600; }
+      .uploads-row { font-size: 10px; color: #777; margin-top: 6px; }
+      .footer { margin-top: 30px; border-top: 1px solid #e0e0e0; padding-top: 12px; text-align: center; font-size: 9px; color: #999; }
+      @media print { body { padding: 15px; } }
+    </style></head><body>
+    <div class="header">
+      <div>
+        <h1>ATUBRE TASK FLOW</h1>
+        <div style="font-size:11px;color:#555;margin-top:4px;">Completed Tasks — Full Report</div>
+      </div>
+      <div class="meta">
+        <div>Generated: ${now}</div>
+        <div>By: ${cu.name}</div>
+        <div style="margin-top:4px;font-weight:700;color:#00b4d8;">${completed.length} tasks completed</div>
+      </div>
+    </div>
+    <div class="summary">
+      <div class="summary-box"><div class="num">${completed.length}</div><div class="lbl">Total Completed</div></div>
+      <div class="summary-box"><div class="num">${completed.filter(t=>t.type==="assigned").length}</div><div class="lbl">Assigned</div></div>
+      <div class="summary-box"><div class="num">${completed.filter(t=>t.type==="pool").length}</div><div class="lbl">Open Pool</div></div>
+      <div class="summary-box"><div class="num">${completed.filter(t=>t.type==="private").length}</div><div class="lbl">Private</div></div>
+    </div>`;
+
+  sorted.forEach(t => {
+    const typeLabel = {assigned:"Assigned",pool:"Open Pool",private:"Private"}[t.type]||t.type;
+    const typeCls   = {assigned:"tag-assigned",pool:"tag-pool",private:"tag-private"}[t.type]||"";
+    const priCls    = {high:"tag-pri-high",medium:"tag-pri-medium",low:"tag-pri-low"}[t.priority||"low"]||"";
+    const uploads   = t.uploads||[];
+
+    let people = "";
+    if(t.type==="assigned" && (t.completedBy||[]).length>0){
+      people = t.completedBy.map(c=>{
+        const started = t.acceptedBy?.find(a=>a.uid===c.uid);
+        return `<div class="person-row">
+          <div class="person-name">👤 ${c.name||"Unknown"}</div>
+          ${started?`<div class="time-row">⚡ <span>Started:</span> ${fmt(started.startedAt)}</div>`:""}
+          <div class="time-row">✅ <span>Completed:</span> ${fmt(c.completedAt)}</div>
+        </div>`;
+      }).join("");
+    } else if(t.type==="pool" && (t.claims||[]).filter(c=>c.completedAt).length>0){
+      people = t.claims.filter(c=>c.completedAt).map(c=>`
+        <div class="person-row">
+          <div class="person-name">👤 ${c.name||"Unknown"}</div>
+          <div class="time-row">⚡ <span>Started:</span> ${fmt(c.startedAt)}</div>
+          <div class="time-row">✅ <span>Completed:</span> ${fmt(c.completedAt)}</div>
+        </div>`).join("");
+    } else if(t.type==="private"){
+      const completors = (t.privateCompletedBy||[]);
+      if(completors.length>0){
+        people = completors.map(c=>{
+          const started = (t.privateAcceptedBy||[]).find(a=>a.uid===c.uid);
+          return `<div class="person-row">
+            <div class="person-name">🔒 ${c.name||"Unknown"}</div>
+            ${started?`<div class="time-row">⚡ <span>Started:</span> ${fmt(started.startedAt)}</div>`:""}
+            <div class="time-row">✅ <span>Completed:</span> ${fmt(c.completedAt)}</div>
+          </div>`;
+        }).join("");
+      } else {
+        people = `<div class="person-row"><div class="time-row">✅ <span>Completed:</span> ${fmt(t.completedAt)}</div></div>`;
+      }
+    }
+
+    html += `<div class="task-block">
+      <div class="task-header">
+        <div class="task-title">${t.title}</div>
+        ${t.desc?`<div class="task-desc">${t.desc}</div>`:""}
+        <div class="task-tags">
+          <span class="tag ${typeCls}">${typeLabel}</span>
+          ${t.priority?`<span class="tag ${priCls}">${t.priority} priority</span>`:""}
+          ${t.tag?`<span class="tag tag-cat">${t.tag}</span>`:""}
+          ${t.due?`<span class="tag tag-cat">📅 Due: ${t.due}</span>`:""}
+        </div>
+      </div>
+      <div class="task-body">
+        ${people}
+        ${uploads.length>0?`<div class="uploads-row">📎 ${uploads.length} file(s) uploaded: ${uploads.map(u=>u.name).join(", ")}</div>`:""}
+      </div>
+    </div>`;
+  });
+
+  html += `<div class="footer">Atubre Task Flow — Confidential Admin Report · Generated ${now}</div></body></html>`;
+
+  // Open in new window and trigger print/save as PDF
+  const win = window.open("","_blank","width=800,height=900");
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(()=>win.print(), 600);
+};
+
 // ── NOTIFICATIONS ─────────────────────────────────
 async function notifyAdmins(msg,type,taskId){
   const snap=await getDocs(query(collection(db,"users"),where("role","==","admin")));
@@ -1542,10 +1673,13 @@ select option{background:#0d0f16;}
 
 <!-- COMPLETED REPORT MODAL -->
 <div class="modal-overlay" id="report-modal">
-  <div class="modal" style="width:600px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;">
+  <div class="modal" style="width:620px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px;">
       <h3 style="margin:0;">✅ COMPLETION REPORT</h3>
-      <button class="btn btn-ghost btn-sm" onclick="closeModal('report-modal')">✕ Close</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-green btn-sm" onclick="downloadPDFReport()">⬇ Download PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('report-modal')">✕ Close</button>
+      </div>
     </div>
     <div id="report-body"></div>
   </div>
