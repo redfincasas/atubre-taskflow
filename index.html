@@ -1007,13 +1007,16 @@ window.openCompletedReport = () => {
     const uploads = (t.uploads||[]).length;
     return `<div class="report-card">
       <div class="report-card-header">
-        <div>
-          <div class="report-title">${t.title}</div>
-          <div class="task-meta" style="margin-top:6px;">
-            <span class="tag ${typeCls}">${typeLabel}</span>
-            ${t.tag?`<span class="tag tag-soft">${t.tag}</span>`:""}
-            ${uploads>0?`<span class="tag tag-cyan">📎 ${uploads} file(s)</span>`:""}
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+          <div>
+            <div class="report-title">${t.title}</div>
+            <div class="task-meta" style="margin-top:6px;">
+              <span class="tag ${typeCls}">${typeLabel}</span>
+              ${t.tag?`<span class="tag tag-soft">${t.tag}</span>`:""}
+              ${uploads>0?`<span class="tag tag-cyan">📎 ${uploads} file(s)</span>`:""}
+            </div>
           </div>
+          <button class="btn btn-green btn-sm" style="flex-shrink:0;" onclick="downloadSingleTaskPDF('${t.id}')">⬇ PDF</button>
         </div>
       </div>
       ${completions}
@@ -1030,6 +1033,13 @@ function getCompletedTime(t) {
   return null;
 }
 
+window.downloadSingleTaskPDF = (taskId) => {
+  const t = (window._tasks||[]).find(x=>x.id===taskId);
+  if(!t) return;
+  generateTaskPDF(t);
+};
+
+// Keep bulk download accessible from console if ever needed
 window.downloadPDFReport = () => {
   const T = window._tasks || [];
   const completed = T.filter(t => t.status === "completed");
@@ -1094,50 +1104,72 @@ window.downloadPDFReport = () => {
       <div class="summary-box"><div class="num">${completed.filter(t=>t.type==="private").length}</div><div class="lbl">Private</div></div>
     </div>`;
 
-  sorted.forEach(t => {
-    const typeLabel = {assigned:"Assigned",pool:"Open Pool",private:"Private"}[t.type]||t.type;
-    const typeCls   = {assigned:"tag-assigned",pool:"tag-pool",private:"tag-private"}[t.type]||"";
-    const priCls    = {high:"tag-pri-high",medium:"tag-pri-medium",low:"tag-pri-low"}[t.priority||"low"]||"";
-    const uploads   = t.uploads||[];
+  sorted.forEach(t => { html += buildTaskBlock(t); });
+  html += `<div class="footer">Atubre Task Flow — Confidential Admin Report · Generated ${now}</div></body></html>`;
+  const win = window.open("","_blank","width=800,height=900");
+  win.document.write(html); win.document.close(); win.focus();
+  setTimeout(()=>win.print(), 600);
+};
 
-    let people = "";
-    if(t.type==="assigned" && (t.completedBy||[]).length>0){
-      people = t.completedBy.map(c=>{
-        const started = t.acceptedBy?.find(a=>a.uid===c.uid);
-        return `<div class="person-row">
-          <div class="person-name">👤 ${c.name||"Unknown"}</div>
-          ${started?`<div class="time-row">⚡ <span>Started:</span> ${fmt(started.startedAt)}</div>`:""}
-          <div class="time-row">✅ <span>Completed:</span> ${fmt(c.completedAt)}</div>
-        </div>`;
-      }).join("");
-    } else if(t.type==="pool" && (t.claims||[]).filter(c=>c.completedAt).length>0){
-      people = t.claims.filter(c=>c.completedAt).map(c=>`
-        <div class="person-row">
-          <div class="person-name">👤 ${c.name||"Unknown"}</div>
-          <div class="time-row">⚡ <span>Started:</span> ${fmt(c.startedAt)}</div>
-          <div class="time-row">✅ <span>Completed:</span> ${fmt(c.completedAt)}</div>
-        </div>`).join("");
-    } else if(t.type==="private"){
-      const completors = (t.privateCompletedBy||[]);
-      if(completors.length>0){
-        people = completors.map(c=>{
-          const started = (t.privateAcceptedBy||[]).find(a=>a.uid===c.uid);
-          return `<div class="person-row">
-            <div class="person-name">🔒 ${c.name||"Unknown"}</div>
-            ${started?`<div class="time-row">⚡ <span>Started:</span> ${fmt(started.startedAt)}</div>`:""}
-            <div class="time-row">✅ <span>Completed:</span> ${fmt(c.completedAt)}</div>
-          </div>`;
-        }).join("");
-      } else {
-        people = `<div class="person-row"><div class="time-row">✅ <span>Completed:</span> ${fmt(t.completedAt)}</div></div>`;
-      }
-    }
+// ── SINGLE TASK PDF ────────────────────────────────
+function generateTaskPDF(t) {
+  const now = new Date().toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
+  const typeLabel = {assigned:"Assigned",pool:"Open Pool",private:"Private"}[t.type]||t.type;
+  const safeName = t.title.replace(/[^a-z0-9]/gi,"_").toLowerCase();
 
-    html += `<div class="task-block">
+  const pdfStyles = `
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a2e; background: #fff; padding: 30px; }
+    .header { border-bottom: 3px solid #00b4d8; padding-bottom: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .header h1 { font-size: 18px; color: #00b4d8; letter-spacing: 1px; }
+    .header .meta { font-size: 10px; color: #666; text-align: right; }
+    .task-block { border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+    .task-header { background: #f8f9fa; padding: 14px 16px; border-bottom: 1px solid #e0e0e0; }
+    .task-title { font-size: 15px; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
+    .task-desc { font-size: 11px; color: #444; margin-top:6px; line-height: 1.6; background:#fff; border:1px solid #e8e8e8; border-radius:6px; padding:10px; }
+    .task-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .tag { font-size: 9px; padding: 2px 8px; border-radius: 20px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+    .tag-assigned { background: #e0f7ff; color: #0077a8; }
+    .tag-pool { background: #fff8e1; color: #b8860b; }
+    .tag-private { background: #f3e8ff; color: #7b2d8b; }
+    .tag-cat { background: #f0f0f0; color: #555; }
+    .tag-pri-high { background: #ffebee; color: #c62828; }
+    .tag-pri-medium { background: #fff8e1; color: #b8860b; }
+    .tag-pri-low { background: #e8f5e9; color: #2e7d32; }
+    .task-body { padding: 14px 16px; }
+    .section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 700; margin-bottom: 8px; }
+    .person-row { background: #f8fff8; border: 1px solid #c8e6c9; border-radius: 6px; padding: 12px; margin-bottom: 8px; }
+    .person-name { font-weight: 700; font-size: 12px; color: #1a1a2e; margin-bottom: 5px; }
+    .time-row { font-size: 11px; color: #444; margin-top: 4px; }
+    .time-row span { font-weight: 600; }
+    .uploads-section { margin-top: 14px; padding-top: 12px; border-top: 1px solid #eee; }
+    .uploads-row { font-size: 10px; color: #555; margin-top: 4px; }
+    .footer { margin-top: 24px; border-top: 1px solid #e0e0e0; padding-top: 12px; text-align: center; font-size: 9px; color: #999; }
+    @media print { body { padding: 15px; } }`;
+
+  let people = buildPeopleHTML(t);
+  const uploads = t.uploads||[];
+  const typeCls = {assigned:"tag-assigned",pool:"tag-pool",private:"tag-private"}[t.type]||"";
+  const priCls  = {high:"tag-pri-high",medium:"tag-pri-medium",low:"tag-pri-low"}[t.priority||"low"]||"";
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Task Report — ${t.title}</title>
+    <style>${pdfStyles}</style></head><body>
+    <div class="header">
+      <div>
+        <h1>ATUBRE TASK FLOW</h1>
+        <div style="font-size:11px;color:#555;margin-top:3px;">Task Completion Report</div>
+      </div>
+      <div class="meta">
+        <div>Generated: ${now}</div>
+        <div>By: ${cu.name}</div>
+      </div>
+    </div>
+    <div class="task-block">
       <div class="task-header">
         <div class="task-title">${t.title}</div>
-        ${t.desc?`<div class="task-desc">${t.desc}</div>`:""}
-        <div class="task-tags">
+        ${t.desc?`<div class="task-desc"><strong style="font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:#888;">Task Description:</strong><br><br>${t.desc}</div>`:""}
+        <div class="task-tags" style="margin-top:10px;">
           <span class="tag ${typeCls}">${typeLabel}</span>
           ${t.priority?`<span class="tag ${priCls}">${t.priority} priority</span>`:""}
           ${t.tag?`<span class="tag tag-cat">${t.tag}</span>`:""}
@@ -1145,21 +1177,80 @@ window.downloadPDFReport = () => {
         </div>
       </div>
       <div class="task-body">
+        <div class="section-label">Completed By</div>
         ${people}
-        ${uploads.length>0?`<div class="uploads-row">📎 ${uploads.length} file(s) uploaded: ${uploads.map(u=>u.name).join(", ")}</div>`:""}
+        ${uploads.length>0?`
+          <div class="uploads-section">
+            <div class="section-label">Files Uploaded as Proof (${uploads.length})</div>
+            ${uploads.map((u,i)=>`<div class="uploads-row">${i+1}. ${u.name} — uploaded by ${u.uploadedBy} on ${fmt(u.uploadedAt)}</div>`).join("")}
+          </div>`:""}
       </div>
-    </div>`;
-  });
+    </div>
+    <div class="footer">Atubre Task Flow — Confidential Admin Report · ${now}</div>
+    </body></html>`;
 
-  html += `<div class="footer">Atubre Task Flow — Confidential Admin Report · Generated ${now}</div></body></html>`;
-
-  // Open in new window and trigger print/save as PDF
   const win = window.open("","_blank","width=800,height=900");
-  win.document.write(html);
-  win.document.close();
-  win.focus();
+  win.document.write(html); win.document.close(); win.focus();
   setTimeout(()=>win.print(), 600);
-};
+}
+
+function buildPeopleHTML(t) {
+  if(t.type==="assigned" && (t.completedBy||[]).length>0){
+    return t.completedBy.map(c=>{
+      const started = (t.acceptedBy||[]).find(a=>a.uid===c.uid);
+      return `<div class="person-row">
+        <div class="person-name">👤 ${c.name||"Unknown"}</div>
+        ${started?`<div class="time-row">⚡ <span>Started:</span> ${fmt(started.startedAt)}</div>`:""}
+        <div class="time-row">✅ <span>Completed:</span> ${fmt(c.completedAt)}</div>
+      </div>`;
+    }).join("");
+  } else if(t.type==="pool" && (t.claims||[]).filter(c=>c.completedAt).length>0){
+    return t.claims.filter(c=>c.completedAt).map(c=>`
+      <div class="person-row">
+        <div class="person-name">👤 ${c.name||"Unknown"}</div>
+        <div class="time-row">⚡ <span>Started:</span> ${fmt(c.startedAt)}</div>
+        <div class="time-row">✅ <span>Completed:</span> ${fmt(c.completedAt)}</div>
+      </div>`).join("");
+  } else if(t.type==="private"){
+    const completors = (t.privateCompletedBy||[]);
+    if(completors.length>0){
+      return completors.map(c=>{
+        const started = (t.privateAcceptedBy||[]).find(a=>a.uid===c.uid);
+        return `<div class="person-row">
+          <div class="person-name">🔒 ${c.name||"Unknown"}</div>
+          ${started?`<div class="time-row">⚡ <span>Started:</span> ${fmt(started.startedAt)}</div>`:""}
+          <div class="time-row">✅ <span>Completed:</span> ${fmt(c.completedAt)}</div>
+        </div>`;
+      }).join("");
+    }
+    return `<div class="person-row"><div class="time-row">✅ <span>Completed:</span> ${fmt(t.completedAt)}</div></div>`;
+  }
+  return "";
+}
+
+function buildTaskBlock(t) {
+  const typeLabel = {assigned:"Assigned",pool:"Open Pool",private:"Private"}[t.type]||t.type;
+  const typeCls   = {assigned:"tag-assigned",pool:"tag-pool",private:"tag-private"}[t.type]||"";
+  const priCls    = {high:"tag-pri-high",medium:"tag-pri-medium",low:"tag-pri-low"}[t.priority||"low"]||"";
+  const uploads   = t.uploads||[];
+  const people    = buildPeopleHTML(t);
+  return `<div class="task-block">
+    <div class="task-header">
+      <div class="task-title">${t.title}</div>
+      ${t.desc?`<div class="task-desc">${t.desc}</div>`:""}
+      <div class="task-tags">
+        <span class="tag ${typeCls}">${typeLabel}</span>
+        ${t.priority?`<span class="tag ${priCls}">${t.priority} priority</span>`:""}
+        ${t.tag?`<span class="tag tag-cat">${t.tag}</span>`:""}
+        ${t.due?`<span class="tag tag-cat">📅 Due: ${t.due}</span>`:""}
+      </div>
+    </div>
+    <div class="task-body">
+      ${people}
+      ${uploads.length>0?`<div class="uploads-row">📎 ${uploads.length} file(s): ${uploads.map(u=>u.name).join(", ")}</div>`:""}
+    </div>
+  </div>`;
+}
 
 // ── NOTIFICATIONS ─────────────────────────────────
 async function notifyAdmins(msg,type,taskId){
@@ -1676,10 +1767,7 @@ select option{background:#0d0f16;}
   <div class="modal" style="width:620px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px;">
       <h3 style="margin:0;">✅ COMPLETION REPORT</h3>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-green btn-sm" onclick="downloadPDFReport()">⬇ Download PDF</button>
-        <button class="btn btn-ghost btn-sm" onclick="closeModal('report-modal')">✕ Close</button>
-      </div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('report-modal')">✕ Close</button>
     </div>
     <div id="report-body"></div>
   </div>
