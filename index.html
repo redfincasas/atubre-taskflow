@@ -995,15 +995,40 @@ window.saveTask = async () => {
     due:$("task-due-input").value.trim(),tag:$("task-tag-input").value.trim(),type,assignees,sharedWith};
   $("save-task-btn").textContent="Saving...";
   try {
+    let taskId=editingTaskId;
     if(editingTaskId){
       await updateDoc(doc(db,"tasks",editingTaskId),data);
       await logAct(`${cu.name} updated: "${title}"`, "edit", editingTaskId);
       toast("Updated ✓","success");
     } else {
       const ref=await addDoc(collection(db,"tasks"),{...data,status:"pending",acceptedBy:[],
-        completedBy:[],claims:[],uploads:[],ownerId:cu.id,createdBy:cu.id,createdAt:serverTimestamp()});
+        completedBy:[],claims:[],uploads:[],subtasks:[],comments:[],ownerId:cu.id,createdBy:cu.id,createdAt:serverTimestamp()});
+      taskId=ref.id;
       await logAct(`${cu.name} created ${type} task: "${title}"`, "create", ref.id);
       toast("Task created ⚡","success");
+    }
+    // Upload any attached files
+    const pending=window._pendingAttachments||[];
+    if(pending.length>0 && taskId){
+      $("save-task-btn").textContent=`Uploading ${pending.length} file(s)...`;
+      const t=editingTaskId?(window._tasks||[]).find(x=>x.id===taskId):null;
+      const existingUploads=t?.uploads||[];
+      const newUploads=[];
+      for(let i=0;i<pending.length;i++){
+        const file=pending[i];
+        $("save-task-btn").textContent=`Uploading ${i+1}/${pending.length}...`;
+        try {
+          const result=await uploadToCloudinary(file,()=>{});
+          newUploads.push({url:result.secure_url,type:file.type,name:file.name,
+            uploadedBy:cu.name,uploadedById:cu.id,uploadedAt:new Date().toISOString(),publicId:result.public_id});
+        } catch(e){ toast(`Failed to upload ${file.name}`,"error"); }
+      }
+      if(newUploads.length>0){
+        await updateDoc(doc(db,"tasks",taskId),{uploads:[...existingUploads,...newUploads]});
+        await logAct(`${cu.name} attached ${newUploads.length} file(s) to: "${title}"`, "upload", taskId);
+      }
+      window._pendingAttachments=[];
+      toast(`Task saved with ${newUploads.length} file(s) attached ✅`,"success");
     }
     closeModal("task-modal");
   } catch(e){ toast("Error: "+e.message,"error"); }
@@ -1357,7 +1382,37 @@ async function logAct(msg,type,taskId){
   await addDoc(collection(db,"activity"),{msg,type,taskId,user:cu.name,createdAt:serverTimestamp()});
 }
 
-window.closeModal=id=>document.getElementById(id).classList.remove("open");
+window.closeModal=id=>{
+  document.getElementById(id).classList.remove("open");
+  // Clear attachments when task modal closes
+  if(id==="task-modal"){
+    const inp=document.getElementById("task-attach-input");
+    if(inp) inp.value="";
+    const prev=document.getElementById("task-attach-preview");
+    if(prev) prev.innerHTML="";
+    const st=document.getElementById("task-attach-status");
+    if(st) st.textContent="";
+    window._pendingAttachments=[];
+  }
+};
+
+window._pendingAttachments=[];
+
+window.previewTaskAttachments = () => {
+  const files=[...document.getElementById("task-attach-input").files];
+  window._pendingAttachments=files;
+  const prev=document.getElementById("task-attach-preview");
+  prev.innerHTML=files.map(f=>{
+    if(f.type.startsWith("image")){
+      const url=URL.createObjectURL(f);
+      return `<div style="position:relative;">
+        <img src="${url}" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid rgba(0,229,255,.2);">
+      </div>`;
+    }
+    return `<div style="background:var(--card);border:1px solid rgba(0,229,255,.15);border-radius:8px;padding:6px 10px;font-size:.75rem;color:var(--soft);">${f.type.includes("video")?"🎥":"📄"} ${f.name}</div>`;
+  }).join("");
+  document.getElementById("task-attach-status").textContent=files.length>0?`${files.length} file(s) selected — will upload when task is saved`:"";
+};
 
 // ══════════════════════════════════════════════════
 // ── SUB-TASKS ─────────────────────────────────────
@@ -2071,6 +2126,18 @@ select option{background:#0d0f16;}
     </div>
     <label>Category / Tag</label>
     <input type="text" id="task-tag-input" placeholder="e.g. WiFi Installation, Finance, Operations">
+
+    <!-- ATTACH FILES — shown for all task types -->
+    <div id="task-attach-section" style="margin-top:4px;">
+      <div class="field-section-title" style="font-family:'Orbitron',sans-serif;font-size:.65rem;color:var(--soft);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;">Attach Files (optional)</div>
+      <input type="file" id="task-attach-input" multiple accept="image/*,video/*,.pdf,.doc,.docx" style="display:none" onchange="previewTaskAttachments()">
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:8px;" onclick="document.getElementById('task-attach-input').click()">
+        📸 Attach Photos / Videos / Documents
+      </button>
+      <div id="task-attach-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;"></div>
+      <div id="task-attach-status" style="font-size:.75rem;color:var(--muted);"></div>
+    </div>
+
     <div class="modal-footer">
       <button class="btn btn-ghost btn-sm" onclick="closeModal('task-modal')">Cancel</button>
       <button class="btn btn-primary btn-sm" onclick="saveTask()" id="save-task-btn">Create Task</button>
