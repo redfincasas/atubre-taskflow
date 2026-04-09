@@ -317,6 +317,17 @@ function subscribeAll(){
   unsubs.push(onSnapshot(query(collection(db,"tasks"),orderBy("createdAt","desc")), snap=>{
     window._tasks=snap.docs.map(d=>({id:d.id,...d.data()}));
     renderPage(currentPage);
+    // Live-update open subtask/comment modals
+    const stId=$("subtask-task-id")?.value;
+    if(stId&&$("subtask-modal").classList.contains("open")){
+      const t=(window._tasks||[]).find(x=>x.id===stId);
+      if(t) renderSubtaskList(t);
+    }
+    const cmId=$("comments-task-id")?.value;
+    if(cmId&&$("comments-modal").classList.contains("open")){
+      const t=(window._tasks||[]).find(x=>x.id===cmId);
+      if(t) renderCommentsList(t);
+    }
     // Update private badge — incomplete private tasks owned by or shared with me
     if(cu.role==="admin"){
       const privatePending=(window._tasks||[]).filter(t=>
@@ -694,19 +705,62 @@ function adminCard(t){
           ${t.tag?`<span class="tag tag-soft">${t.tag}</span>`:""}
           ${t.due?`<span class="task-date">📅 ${t.due}</span>`:""}
           ${(t.uploads||[]).length>0?`<span class="tag tag-cyan">📎 ${t.uploads.length} file(s)</span>`:""}
+          ${(t.subtasks||[]).length>0?`<span class="tag tag-soft">📋 ${t.subtasks.filter(s=>s.done).length}/${t.subtasks.length} steps</span>`:""}
+          ${(t.comments||[]).length>0?`<span class="tag tag-soft">💬 ${t.comments.length} note(s)</span>`:""}
+          ${t.isFollowUp?`<span class="followup-badge">🔁 Follow-up</span>`:""}
+          ${t.hasFollowUp?`<span class="followup-badge">🔁 Has follow-up</span>`:""}
         </div>
         ${ts?`<div style="margin-top:8px;">${ts}</div>`:""}
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0;">
-        <button class="btn btn-ghost btn-sm" onclick="openEditTask('${t.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')">Del</button>
+      <div style="display:flex;gap:6px;flex-shrink:0;flex-direction:column;align-items:flex-end;">
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" onclick="openEditTask('${t.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')">Del</button>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" onclick="openSubtaskModal('${t.id}')">📋 Steps</button>
+          <button class="btn btn-ghost btn-sm" onclick="openCommentsModal('${t.id}')">💬 Notes</button>
+          <button class="btn btn-ghost btn-sm" onclick="openFollowUpModal('${t.id}')">🔁 Follow-up</button>
+        </div>
       </div>
     </div>
     ${mediaPreviewHTML(t.uploads, t.id)}
   </div>`;
 }
 
+function subtaskProgressHTML(t){
+  const subs=t.subtasks||[];
+  if(!subs.length) return "";
+  const done=subs.filter(s=>s.done).length;
+  const pct=Math.round(done/subs.length*100);
+  return `<div class="subtask-progress-inline">
+    <div style="background:rgba(0,229,255,.1);border-radius:20px;height:5px;width:80px;overflow:hidden;">
+      <div style="background:${pct===100?'var(--green)':'var(--cyan)'};height:100%;width:${pct}%;border-radius:20px;"></div>
+    </div>
+    <span>${done}/${subs.length} steps</span>
+  </div>`;
+}
+
+function taskActionBtns(t){
+  const subs=t.subtasks||[];
+  const comments=t.comments||[];
+  const hasFollowUp=t.hasFollowUp;
+  return `<div class="action-btns-row">
+    <button class="btn btn-ghost btn-sm" onclick="openSubtaskModal('${t.id}')">
+      📋 Steps ${subs.length>0?`(${subs.filter(s=>s.done).length}/${subs.length})`:""}
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="openCommentsModal('${t.id}')">
+      💬 Notes ${comments.length>0?`(${comments.length})`:""}
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="openFollowUpModal('${t.id}')">
+      🔁 Follow-up ${hasFollowUp?'<span class="followup-badge">linked</span>':""}
+    </button>
+  </div>`;
+}
+
 function fullTaskCard(t, tagCls, tagLabel, actions){
+  const subs=t.subtasks||[];
+  const comments=t.comments||[];
   return `<div class="task-accept-card">
     <div class="task-card-top">
       <div style="flex:1;">
@@ -718,10 +772,14 @@ function fullTaskCard(t, tagCls, tagLabel, actions){
           <span class="pri-tag-${t.priority||"low"}">${t.priority}</span>
           ${t.due?`<span class="task-date">📅 ${t.due}</span>`:""}
           ${(t.uploads||[]).length>0?`<span class="tag tag-cyan">📎 ${t.uploads.length} file(s)</span>`:""}
+          ${t.isFollowUp?`<span class="followup-badge">🔁 Follow-up</span>`:""}
+          ${t.hasFollowUp?`<span class="followup-badge">🔁 Has follow-up</span>`:""}
         </div>
+        ${subtaskProgressHTML(t)}
       </div>
     </div>
     <div class="task-actions" style="margin-top:12px;">${actions}</div>
+    ${taskActionBtns(t)}
     ${mediaPreviewHTML(t.uploads, t.id)}
   </div>`;
 }
@@ -739,11 +797,13 @@ window.acceptTask = async id => {
 
 window.completeTask = async id => {
   const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
-  const entry={uid:cu.id,name:cu.name,completedAt:Timestamp.now()};
-  await updateDoc(doc(db,"tasks",id),{completedBy:[...(t.completedBy||[]),entry],status:"completed"});
-  await logAct(`${cu.name} completed: "${t.title}"`, "complete", id);
-  await notifyAdmins(`${cu.name} completed: "${t.title}" — at ${fmt(entry.completedAt)}`, "complete", id);
-  toast("Task complete! ✅","success");
+  openConfirmComplete(id, t.title, async () => {
+    const entry={uid:cu.id,name:cu.name,completedAt:Timestamp.now()};
+    await updateDoc(doc(db,"tasks",id),{completedBy:[...(t.completedBy||[]),entry],status:"completed"});
+    await logAct(`${cu.name} completed: "${t.title}"`, "complete", id);
+    await notifyAdmins(`${cu.name} completed: "${t.title}" — at ${fmt(entry.completedAt)}`, "complete", id);
+    toast("Task complete! ✅","success");
+  });
 };
 
 window.claimPool = async id => {
@@ -758,12 +818,14 @@ window.claimPool = async id => {
 
 window.completePool = async id => {
   const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
-  const now=Timestamp.now();
-  const newClaims=(t.claims||[]).map(c=>c.uid===cu.id?{...c,completedAt:now}:c);
-  await updateDoc(doc(db,"tasks",id),{claims:newClaims,status:newClaims.every(c=>c.completedAt)?"completed":"accepted"});
-  await logAct(`${cu.name} completed pool task: "${t.title}"`, "complete", id);
-  await notifyAdmins(`${cu.name} completed pool task: "${t.title}" — at ${fmt(now)}`, "complete", id);
-  toast("Pool task complete! ✅","success");
+  openConfirmComplete(id, t.title, async () => {
+    const now=Timestamp.now();
+    const newClaims=(t.claims||[]).map(c=>c.uid===cu.id?{...c,completedAt:now}:c);
+    await updateDoc(doc(db,"tasks",id),{claims:newClaims,status:newClaims.every(c=>c.completedAt)?"completed":"accepted"});
+    await logAct(`${cu.name} completed pool task: "${t.title}"`, "complete", id);
+    await notifyAdmins(`${cu.name} completed pool task: "${t.title}" — at ${fmt(now)}`, "complete", id);
+    toast("Pool task complete! ✅","success");
+  });
 };
 
 window.startPrivate = async id => {
@@ -780,14 +842,16 @@ window.startPrivate = async id => {
 
 window.completePrivate = async id => {
   const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
-  const entry={uid:cu.id,name:cu.name,completedAt:Timestamp.now()};
-  await updateDoc(doc(db,"tasks",id),{
-    privateCompletedBy:[...(t.privateCompletedBy||[]),entry],
-    status:"completed",
-    completedAt:Timestamp.now()
+  openConfirmComplete(id, t.title, async () => {
+    const entry={uid:cu.id,name:cu.name,completedAt:Timestamp.now()};
+    await updateDoc(doc(db,"tasks",id),{
+      privateCompletedBy:[...(t.privateCompletedBy||[]),entry],
+      status:"completed",
+      completedAt:Timestamp.now()
+    });
+    await logAct(`${cu.name} completed private task: "${t.title}"`, "complete", id);
+    toast("Private task done ✅","success");
   });
-  await logAct(`${cu.name} completed private task: "${t.title}"`, "complete", id);
-  toast("Private task done ✅","success");
 };
 
 window.deleteTask = async id => {
@@ -974,6 +1038,7 @@ window.openCompletedReport = () => {
           <div class="report-who">
             <div class="mini-avatar">${ini(c.name||"?")}</div>
             <strong>${c.name||"Unknown"}</strong>
+            ${c.uid===cu.id?`<button class="btn btn-ghost btn-sm" style="margin-left:auto;font-size:.6rem;" onclick="undoComplete('${t.id}')">↩ Undo</button>`:""}
           </div>
           <div class="report-time">✅ Completed: ${fmt(c.completedAt)}</div>
           ${t.acceptedBy?.find(a=>a.uid===c.uid)?`<div class="report-time">⚡ Started: ${fmt(t.acceptedBy.find(a=>a.uid===c.uid).startedAt)}</div>`:""}
@@ -1267,8 +1332,16 @@ window.closeNotifPanel=()=>$("notif-panel").classList.remove("open");
 async function renderNotifs(){
   const N=window._notifs||[];
   for(const n of N.filter(x=>!x.read)) await updateDoc(doc(db,"notifications",n.id),{read:true});
+  const typeClass=t=>{
+    if(t==="complete") return "type-complete";
+    if(t==="accept") return "type-accept";
+    if(t==="upload") return "type-upload";
+    if(t==="comment") return "type-comment";
+    if(t==="approval") return "type-approval";
+    return "";
+  };
   $("notif-list").innerHTML=N.length?N.map(n=>`
-    <div class="notif-item ${n.type==="complete"?"type-complete":n.type==="accept"?"type-accept":n.type==="upload"?"type-upload":""}">
+    <div class="notif-item ${typeClass(n.type)}">
       <div>${n.msg}</div><div class="notif-time">${fmt(n.createdAt)}</div>
     </div>`).join(""):`<div style="color:var(--muted);text-align:center;padding:20px;font-size:.82rem;">No notifications</div>`;
 }
@@ -1279,6 +1352,214 @@ async function logAct(msg,type,taskId){
 }
 
 window.closeModal=id=>document.getElementById(id).classList.remove("open");
+
+// ══════════════════════════════════════════════════
+// ── SUB-TASKS ─────────────────────────────────────
+// ══════════════════════════════════════════════════
+window.openSubtaskModal = async (taskId) => {
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  $("subtask-task-id").value=taskId;
+  $("subtask-title-display").textContent=t.title;
+  $("new-subtask-input").value="";
+  renderSubtaskList(t);
+  $("subtask-modal").classList.add("open");
+};
+
+function renderSubtaskList(t) {
+  const subs=t.subtasks||[];
+  if(!subs.length){
+    $("subtask-list").innerHTML=`<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:16px;">No steps added yet</div>`;
+    return;
+  }
+  const done=subs.filter(s=>s.done).length;
+  $("subtask-list").innerHTML=`
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:.72rem;color:var(--soft);font-family:'Orbitron',sans-serif;text-transform:uppercase;letter-spacing:.08em;">Progress</span>
+        <span style="font-size:.72rem;color:var(--cyan);font-family:'Orbitron',sans-serif;">${done}/${subs.length}</span>
+      </div>
+      <div style="background:rgba(0,229,255,.1);border-radius:20px;height:6px;overflow:hidden;">
+        <div style="background:var(--cyan);height:100%;width:${subs.length?Math.round(done/subs.length*100):0}%;border-radius:20px;transition:width .3s;"></div>
+      </div>
+    </div>
+    ${subs.map((s,i)=>`
+      <div class="subtask-item ${s.done?'subtask-done':''}">
+        <input type="checkbox" ${s.done?'checked':''} onchange="toggleSubtask('${t.id}',${i})" style="width:auto;margin:0;cursor:pointer;accent-color:var(--green);">
+        <span class="subtask-text">${s.text}</span>
+        ${cu.role==="admin"?`<button onclick="deleteSubtask('${t.id}',${i})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.8rem;margin-left:auto;padding:0 4px;" title="Remove step">✕</button>`:""}
+      </div>`).join("")}`;
+}
+
+window.addSubtask = async () => {
+  const taskId=$("subtask-task-id").value;
+  const text=$("new-subtask-input").value.trim();
+  if(!text) return;
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  const subs=[...(t.subtasks||[]),{text,done:false,addedBy:cu.name,addedAt:new Date().toISOString()}];
+  await updateDoc(doc(db,"tasks",taskId),{subtasks:subs});
+  $("new-subtask-input").value="";
+  toast("Step added ✓","success");
+};
+
+window.toggleSubtask = async (taskId,idx) => {
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  const subs=(t.subtasks||[]).map((s,i)=>i===idx?{...s,done:!s.done,doneBy:cu.name,doneAt:new Date().toISOString()}:s);
+  const allDone=subs.length>0&&subs.every(s=>s.done);
+  await updateDoc(doc(db,"tasks",taskId),{subtasks:subs});
+  if(allDone) toast("All steps complete! Don't forget to mark the task done ✅","info");
+};
+
+window.deleteSubtask = async (taskId,idx) => {
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  const subs=(t.subtasks||[]).filter((_,i)=>i!==idx);
+  await updateDoc(doc(db,"tasks",taskId),{subtasks:subs});
+};
+
+// ══════════════════════════════════════════════════
+// ── COMMENTS / NOTES ──────────────────────────────
+// ══════════════════════════════════════════════════
+window.openCommentsModal = async (taskId) => {
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  $("comments-task-id").value=taskId;
+  $("comments-task-title").textContent=t.title;
+  $("new-comment-input").value="";
+  renderCommentsList(t);
+  $("comments-modal").classList.add("open");
+};
+
+function renderCommentsList(t) {
+  const comments=t.comments||[];
+  if(!comments.length){
+    $("comments-list").innerHTML=`<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:20px;">No notes yet — be the first to add one</div>`;
+    return;
+  }
+  $("comments-list").innerHTML=[...comments].reverse().map((c,i)=>{
+    const isMe=c.userId===cu.id;
+    const realIdx=comments.length-1-i;
+    return `<div class="comment-item ${isMe?'comment-mine':''}">
+      <div class="comment-header">
+        <div class="mini-avatar" style="${isMe?'background:var(--cyan);color:#000;':'background:var(--gold);color:#000;'}">${ini(c.userName)}</div>
+        <strong style="font-size:.85rem;">${c.userName}</strong>
+        <span style="color:var(--muted);font-size:.72rem;margin-left:auto;">${fmt(c.createdAt)}</span>
+        ${isMe||cu.role==="admin"?`<button onclick="deleteComment('${t.id}',${realIdx})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:0 4px;" title="Delete">🗑️</button>`:""}
+      </div>
+      <div class="comment-text">${c.text}</div>
+    </div>`;
+  }).join("");
+}
+
+window.addComment = async () => {
+  const taskId=$("comments-task-id").value;
+  const text=$("new-comment-input").value.trim();
+  if(!text) return;
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  const comment={text,userName:cu.name,userId:cu.id,createdAt:new Date().toISOString()};
+  const comments=[...(t.comments||[]),comment];
+  await updateDoc(doc(db,"tasks",taskId),{comments});
+  $("new-comment-input").value="";
+  // Notify admins if member commented
+  if(cu.role==="member") await notifyAdmins(`${cu.name} left a note on: "${t.title}" — "${text.substr(0,60)}${text.length>60?'...':''}"`, "comment", taskId);
+  toast("Note added ✓","success");
+};
+
+window.deleteComment = async (taskId,idx) => {
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  const comments=(t.comments||[]).filter((_,i)=>i!==idx);
+  await updateDoc(doc(db,"tasks",taskId),{comments});
+};
+
+// Live update comments modal when tasks update
+const _origRenderPage = renderPage;
+
+// ══════════════════════════════════════════════════
+// ── FOLLOW-UP TASK ────────────────────────────────
+// ══════════════════════════════════════════════════
+window.openFollowUpModal = (taskId) => {
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  $("followup-parent-id").value=taskId;
+  $("followup-title-input").value=`Follow-up: ${t.title}`;
+  $("followup-desc-input").value="";
+  $("followup-priority-input").value=t.priority||"medium";
+  $("followup-due-input").value="";
+  $("followup-parent-title").textContent=t.title;
+  $("followup-modal").classList.add("open");
+};
+
+window.createFollowUp = async () => {
+  const parentId=$("followup-parent-id").value;
+  const title=$("followup-title-input").value.trim();
+  const desc=$("followup-desc-input").value.trim();
+  if(!title) return toast("Please enter a title","error");
+  const parent=(window._tasks||[]).find(x=>x.id===parentId); if(!parent) return;
+  $("followup-save-btn").textContent="Creating...";
+  try {
+    // Create the follow-up task
+    const ref=await addDoc(collection(db,"tasks"),{
+      title, desc,
+      priority: $("followup-priority-input").value,
+      due: $("followup-due-input").value.trim(),
+      tag: parent.tag||"",
+      type: parent.type,
+      assignees: parent.assignees||[],
+      sharedWith: parent.sharedWith||[],
+      status:"pending",
+      acceptedBy:[],completedBy:[],claims:[],uploads:[],subtasks:[],comments:[],
+      ownerId:cu.id,createdBy:cu.id,
+      parentTaskId:parentId,
+      isFollowUp:true,
+      createdAt:serverTimestamp()
+    });
+    // Mark parent as having a follow-up
+    await updateDoc(doc(db,"tasks",parentId),{
+      hasFollowUp:true,
+      followUpId:ref.id,
+      followUpStatus:"pending"
+    });
+    await logAct(`${cu.name} created follow-up task for: "${parent.title}"`, "create", ref.id);
+    await notifyAdmins(`Follow-up created for: "${parent.title}" — "${title}"`, "create", ref.id);
+    toast("Follow-up task created! 🔁","success");
+    closeModal("followup-modal");
+  } catch(e){ toast("Error: "+e.message,"error"); }
+  $("followup-save-btn").textContent="Create Follow-up";
+};
+
+// ── CONFIRM COMPLETE ──────────────────────────────
+let _confirmCallback = null;
+window.openConfirmComplete = (id, title, callback) => {
+  _confirmCallback = callback;
+  $("confirm-task-title").textContent = title;
+  $("confirm-modal").classList.add("open");
+};
+window.confirmComplete = async () => {
+  closeModal("confirm-modal");
+  if(_confirmCallback) await _confirmCallback();
+  _confirmCallback = null;
+};
+
+// ── UNDO COMPLETE ─────────────────────────────────
+window.undoComplete = async (id) => {
+  if(!confirm("Undo completion? This will move the task back to In Progress.")) return;
+  const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
+  if(t.type==="assigned"){
+    const newCompleted=(t.completedBy||[]).filter(c=>c.uid!==cu.id);
+    await updateDoc(doc(db,"tasks",id),{
+      completedBy: newCompleted,
+      status: newCompleted.length===0?"accepted":"completed"
+    });
+  } else if(t.type==="pool"){
+    const newClaims=(t.claims||[]).map(c=>c.uid===cu.id?{...c,completedAt:null}:c);
+    await updateDoc(doc(db,"tasks",id),{claims:newClaims,status:"accepted"});
+  } else if(t.type==="private"){
+    const newCompleted=(t.privateCompletedBy||[]).filter(c=>c.uid!==cu.id);
+    await updateDoc(doc(db,"tasks",id),{
+      privateCompletedBy: newCompleted,
+      status: newCompleted.length===0?"accepted":"completed",
+      completedAt: newCompleted.length===0?null:t.completedAt
+    });
+  }
+  await logAct(`${cu.name} undid completion of: "${t.title}"`, "edit", id);
+  toast("Completion undone — task moved back to In Progress ↩","info");
+};
 
 // Mobile nav
 window.toggleMobileNav = () => {
@@ -1457,6 +1738,7 @@ select option{background:#0d0f16;}
 .notif-item.type-accept{border-left-color:var(--gold);}
 .notif-item.type-upload{border-left-color:var(--purple);}
 .notif-item.type-approval{border-left-color:var(--gold);}
+.notif-item.type-comment{border-left-color:var(--purple);}
 .notif-time{color:var(--muted);font-size:.72rem;margin-top:4px;}
 .section-title{font-family:'Orbitron',sans-serif;font-size:.62rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:22px 0 10px;}
 .empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
@@ -1484,6 +1766,19 @@ select option{background:#0d0f16;}
 .report-entry{background:rgba(0,229,255,.04);border-radius:10px;padding:10px 12px;margin-top:8px;border-left:3px solid var(--green);}
 .report-who{display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:.88rem;}
 .report-time{font-size:.76rem;color:var(--soft);margin-top:3px;font-family:'Inter',sans-serif;}
+/* SUBTASKS & COMMENTS */
+.subtask-item{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--card);border-radius:9px;margin-bottom:6px;border:1px solid rgba(0,229,255,.08);transition:all .2s;}
+.subtask-item:hover{border-color:rgba(0,229,255,.2);}
+.subtask-done{opacity:.6;}
+.subtask-done .subtask-text{text-decoration:line-through;color:var(--muted);}
+.subtask-text{font-size:.85rem;flex:1;}
+.comment-item{background:var(--card);border:1px solid rgba(0,229,255,.08);border-radius:12px;padding:12px 14px;margin-bottom:8px;}
+.comment-item.comment-mine{border-color:rgba(0,229,255,.2);background:rgba(0,229,255,.04);}
+.comment-header{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.comment-text{font-size:.85rem;color:var(--text);line-height:1.55;padding-left:30px;}
+.action-btns-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,229,255,.06);}
+.followup-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(179,136,255,.12);color:var(--purple);border:1px solid rgba(179,136,255,.25);border-radius:20px;font-size:.66rem;padding:2px 9px;font-family:'Orbitron',sans-serif;font-weight:600;}
+.subtask-progress-inline{display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--soft);}
 /* LIGHTBOX */
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:300;display:none;align-items:center;justify-content:center;}
 .lightbox.open{display:flex;}
@@ -1758,6 +2053,90 @@ select option{background:#0d0f16;}
     <div class="modal-footer">
       <button class="btn btn-ghost btn-sm" onclick="closeModal(&#39;upload-modal&#39;)">Cancel</button>
       <button class="btn btn-green btn-sm" onclick="handleUpload()" id="upload-btn">⬆ Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUBTASKS MODAL -->
+<div class="modal-overlay" id="subtask-modal">
+  <div class="modal" style="width:520px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <h3 style="margin:0;">📋 TASK STEPS</h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('subtask-modal')">✕ Close</button>
+    </div>
+    <div id="subtask-title-display" style="color:var(--soft);font-size:.82rem;margin-bottom:20px;font-family:'Inter',sans-serif;"></div>
+    <input type="hidden" id="subtask-task-id">
+    <div id="subtask-list"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <input type="text" id="new-subtask-input" placeholder="Add a step e.g. Replace AP cable..." style="margin:0;flex:1;" onkeydown="if(event.key==='Enter')addSubtask()">
+      <button class="btn btn-primary btn-sm" style="flex-shrink:0;" onclick="addSubtask()">＋ Add Step</button>
+    </div>
+  </div>
+</div>
+
+<!-- COMMENTS MODAL -->
+<div class="modal-overlay" id="comments-modal">
+  <div class="modal" style="width:520px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <h3 style="margin:0;">💬 FIELD NOTES</h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('comments-modal')">✕ Close</button>
+    </div>
+    <div id="comments-task-title" style="color:var(--soft);font-size:.82rem;margin-bottom:16px;font-family:'Inter',sans-serif;"></div>
+    <input type="hidden" id="comments-task-id">
+    <div id="comments-list" style="max-height:320px;overflow-y:auto;margin-bottom:14px;"></div>
+    <div style="display:flex;gap:8px;">
+      <textarea id="new-comment-input" rows="2" placeholder="Leave a field note e.g. AP replaced but router still down, needs second visit..." style="margin:0;flex:1;resize:none;" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addComment();}"></textarea>
+      <button class="btn btn-primary btn-sm" style="flex-shrink:0;align-self:flex-end;" onclick="addComment()">Send</button>
+    </div>
+    <div style="color:var(--muted);font-size:.7rem;margin-top:6px;">Press Enter to send · Shift+Enter for new line</div>
+  </div>
+</div>
+
+<!-- FOLLOW-UP MODAL -->
+<div class="modal-overlay" id="followup-modal">
+  <div class="modal" style="width:520px;">
+    <h3>🔁 CREATE FOLLOW-UP TASK</h3>
+    <div style="background:rgba(179,136,255,.08);border:1px solid rgba(179,136,255,.2);border-radius:10px;padding:10px 14px;margin-bottom:18px;font-size:.82rem;color:var(--soft);">
+      Follow-up for: <strong id="followup-parent-title" style="color:var(--purple);"></strong>
+    </div>
+    <input type="hidden" id="followup-parent-id">
+    <label>Follow-up Title *</label>
+    <input type="text" id="followup-title-input" placeholder="e.g. Follow-up: Bugema — router replacement">
+    <label>What needs to be done</label>
+    <textarea id="followup-desc-input" rows="3" placeholder="Describe what still needs to happen..."></textarea>
+    <div class="form-row">
+      <div>
+        <label>Priority</label>
+        <select id="followup-priority-input">
+          <option value="high">🔴 High</option>
+          <option value="medium" selected>🟡 Medium</option>
+          <option value="low">🟢 Low</option>
+        </select>
+      </div>
+      <div>
+        <label>Due Date</label>
+        <input type="text" id="followup-due-input" placeholder="e.g. Apr 15, 2026">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('followup-modal')">Cancel</button>
+      <button class="btn btn-purple btn-sm" onclick="createFollowUp()" id="followup-save-btn">🔁 Create Follow-up Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM COMPLETE MODAL -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal" style="width:420px;text-align:center;">
+    <div style="font-size:2.5rem;margin-bottom:12px;">✅</div>
+    <h3 style="margin-bottom:10px;">MARK AS COMPLETE?</h3>
+    <div id="confirm-task-title" style="color:var(--soft);font-size:.88rem;margin-bottom:6px;font-family:'Inter',sans-serif;line-height:1.5;"></div>
+    <div style="color:var(--muted);font-size:.78rem;margin-bottom:24px;font-family:'Inter',sans-serif;">
+      This will record the completion time and notify the admin.<br>You can undo this from the Completion Report if needed.
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button class="btn btn-ghost btn-sm" style="min-width:100px;" onclick="closeModal('confirm-modal')">✕ Cancel</button>
+      <button class="btn btn-green btn-sm" style="min-width:140px;" onclick="confirmComplete()">✅ Yes, Mark Complete</button>
     </div>
   </div>
 </div>
