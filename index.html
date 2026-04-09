@@ -486,6 +486,7 @@ function assignedCard(t){
              <div class="btn-row">
                <button class="btn btn-green btn-sm" onclick="completeTask('${t.id}')">✅ Mark Complete</button>
                ${uploadBtn(t.id)}
+               <button class="btn btn-ghost btn-sm" onclick="cancelAccept('${t.id}')" style="color:var(--red);border-color:rgba(255,75,110,.3);">↩ Cancel Task</button>
              </div>`;
   else if(completed)
     actions=`<div class="time-stamp">⏱ Started: ${fmt(accepted?.startedAt)}</div>
@@ -530,6 +531,8 @@ function renderInProgress(T){
     const privAccepted=isPrivate?(t.privateAcceptedBy||[]).find(a=>a.uid===uid):null;
     const startTime=accepted?.startedAt||claim?.startedAt||privAccepted?.startedAt;
     const completeAction=isAssigned?`completeTask('${t.id}')`:isPrivate?`completePrivate('${t.id}')`:`completePool('${t.id}')`;
+    const cancelAction=isAssigned?`cancelAccept('${t.id}')`:isPrivate?`cancelPrivateStart('${t.id}')`:`cancelClaim('${t.id}')`;
+    const cancelLabel=isAssigned?"↩ Cancel Task":isPrivate?"↩ Cancel":"↩ Release to Pool";
     const tagCls=isAssigned?"tag-cyan":isPrivate?"tag-purple":"tag-gold";
     const tagLabel=isAssigned?"👤 Assigned":isPrivate?"🔒 Private":"🌊 Pool";
     const actions=`
@@ -537,6 +540,7 @@ function renderInProgress(T){
       <div class="btn-row">
         <button class="btn btn-green btn-sm" onclick="${completeAction}">✅ Mark Complete</button>
         <button class="btn btn-ghost btn-sm" onclick="openUploadModal('${t.id}')">📎 Upload File</button>
+        <button class="btn btn-ghost btn-sm" onclick="${cancelAction}" style="color:var(--red);border-color:rgba(255,75,110,.3);">${cancelLabel}</button>
       </div>`;
     return fullTaskCard(t, tagCls, tagLabel, actions);
   }).join("");
@@ -566,6 +570,7 @@ function poolCard(t){
              <div class="btn-row">
                <button class="btn btn-green btn-sm" onclick="completePool('${t.id}')">✅ Mark Complete</button>
                ${uploadBtn(t.id)}
+               <button class="btn btn-ghost btn-sm" onclick="cancelClaim('${t.id}')" style="color:var(--red);border-color:rgba(255,75,110,.3);">↩ Release to Pool</button>
              </div>`;
   else if(myEntry?.completedAt)
     actions=`<div class="time-stamp">⏱ Started: ${fmt(myEntry.startedAt)}</div>
@@ -632,6 +637,7 @@ function privateCard(t){
             <div class="btn-row">
               <button class="btn btn-green btn-sm" onclick="completePrivate('${t.id}')">✅ Mark Done</button>
               ${uploadBtn(t.id)}
+              <button class="btn btn-ghost btn-sm" onclick="cancelPrivateStart('${t.id}')" style="color:var(--red);border-color:rgba(255,75,110,.3);">↩ Cancel</button>
             </div>`;
   return `<div class="task-accept-card">
     <div class="task-card-top">
@@ -1521,6 +1527,47 @@ window.createFollowUp = async () => {
     closeModal("followup-modal");
   } catch(e){ toast("Error: "+e.message,"error"); }
   $("followup-save-btn").textContent="Create Follow-up";
+};
+
+// ── CANCEL ACCEPT (assigned) ─────────────────────
+window.cancelAccept = async id => {
+  const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
+  if(!confirm(`Cancel this task and put it back to pending?\n\n"${t.title}"\n\nYour start time will be removed.`)) return;
+  const newAccepted=(t.acceptedBy||[]).filter(a=>a.uid!==cu.id);
+  await updateDoc(doc(db,"tasks",id),{
+    acceptedBy: newAccepted,
+    status: newAccepted.length===0 ? "pending" : "accepted"
+  });
+  await logAct(`${cu.name} cancelled acceptance of: "${t.title}"`, "edit", id);
+  await notifyAdmins(`${cu.name} cancelled task: "${t.title}" — returned to pending`, "edit", id);
+  toast("Task cancelled — returned to pending ↩","info");
+};
+
+// ── CANCEL CLAIM (pool) ───────────────────────────
+window.cancelClaim = async id => {
+  const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
+  if(!confirm(`Cancel this task and put it back in the Open Pool?\n\n"${t.title}"\n\nYour claim will be removed.`)) return;
+  const newClaims=(t.claims||[]).filter(c=>c.uid!==cu.id);
+  await updateDoc(doc(db,"tasks",id),{
+    claims: newClaims,
+    status: newClaims.length===0 ? "pending" : newClaims.some(c=>!c.completedAt) ? "accepted" : "completed"
+  });
+  await logAct(`${cu.name} cancelled claim on: "${t.title}"`, "edit", id);
+  await notifyAdmins(`${cu.name} released pool task: "${t.title}" — back in pool`, "edit", id);
+  toast("Claim cancelled — task returned to Open Pool ↩","info");
+};
+
+// ── CANCEL PRIVATE START ──────────────────────────
+window.cancelPrivateStart = async id => {
+  const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
+  if(!confirm(`Cancel this task and return it to pending?\n\n"${t.title}"`)) return;
+  const newAccepted=(t.privateAcceptedBy||[]).filter(a=>a.uid!==cu.id);
+  await updateDoc(doc(db,"tasks",id),{
+    privateAcceptedBy: newAccepted,
+    status: newAccepted.length===0 ? "pending" : "accepted"
+  });
+  await logAct(`${cu.name} cancelled private task: "${t.title}"`, "edit", id);
+  toast("Private task returned to pending ↩","info");
 };
 
 // ── CONFIRM COMPLETE ──────────────────────────────
