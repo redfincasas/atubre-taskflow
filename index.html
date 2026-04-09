@@ -417,7 +417,7 @@ function renderDashboard(T){
     </div>`;
   $("dash-recent").innerHTML=vis.slice(0,5).map(t=>miniCard(t)).join("")||empty("📭","No tasks yet");
   const myOpen=T.filter(t=>(t.assignees||[]).includes(cu.id)&&t.status!=="completed").length;
-  const poolOpen=T.filter(t=>t.type==="pool"&&t.status==="pending"&&!(t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt)).length;
+  const poolOpen=T.filter(t=>t.type==="pool"&&t.status!=="completed"&&!(t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt)).length;
   const myInProgress=T.filter(t=>{
     if(t.type==="assigned") return (t.acceptedBy||[]).find(a=>a.uid===cu.id)&&!(t.completedBy||[]).find(c=>c.uid===cu.id);
     if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt);
@@ -534,10 +534,10 @@ function renderInProgress(T){
 // ── POOL ──────────────────────────────────────────
 function renderPool(T){
   const uid=cu.id;
-  // Hide tasks the current user has already claimed (they go to In Progress)
   const pool=T.filter(t=>
     t.type==="pool" &&
-    !(t.claims||[]).find(c=>c.uid===uid&&!c.completedAt)
+    t.status!=="completed" &&                          // exclude fully completed tasks
+    !(t.claims||[]).find(c=>c.uid===uid&&!c.completedAt) // exclude tasks this user is working on
   );
   $("pool-list").innerHTML=pool.length?pool.map(t=>poolCard(t)).join(""):empty("🌊","No available pool tasks — check In Progress for your active tasks");
 }
