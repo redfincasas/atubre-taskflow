@@ -309,7 +309,17 @@ function initApp() {
   b.className="role-badge "+(cu.role==="admin"?"badge-admin":"badge-member");
   document.querySelectorAll(".admin-only").forEach(el=>el.style.display=cu.role==="admin"?"":"none");
   document.querySelectorAll(".member-only").forEach(el=>el.style.display=cu.role==="member"?"":"none");
-  subscribeAll(); showPage("dashboard");
+  subscribeAll();
+  // Check for deep link task ID in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const deepTaskId = urlParams.get("task");
+  if(deepTaskId){
+    // Wait for tasks to load then open the task
+    window._deepLinkTaskId = deepTaskId;
+    showPage("dashboard");
+  } else {
+    showPage("dashboard");
+  }
 }
 
 function subscribeAll(){
@@ -317,6 +327,14 @@ function subscribeAll(){
   unsubs.push(onSnapshot(query(collection(db,"tasks"),orderBy("createdAt","desc")), snap=>{
     window._tasks=snap.docs.map(d=>({id:d.id,...d.data()}));
     renderPage(currentPage);
+    // Handle deep link
+    if(window._deepLinkTaskId){
+      const dlTask=(window._tasks||[]).find(x=>x.id===window._deepLinkTaskId);
+      if(dlTask){
+        window._deepLinkTaskId=null;
+        openTaskDetailModal(dlTask.id);
+      }
+    }
     // Live-update open subtask/comment modals
     const stId=$("subtask-task-id")?.value;
     if(stId&&$("subtask-modal").classList.contains("open")){
@@ -446,9 +464,9 @@ function miniCard(t){
   const sc={pending:"tag-gray",accepted:"tag-gold",completed:"tag-green"}[t.status];
   const uploads=(t.uploads||[]).length;
   const dest={assigned:cu.role==="admin"?"all-tasks":"my-tasks",pool:"pool",private:cu.role==="admin"?"private":"dashboard"}[t.type]||"dashboard";
-  return `<div class="task-card" style="cursor:pointer;" onclick="showPage('${dest}')">
-    <div class="task-priority pri-${t.priority||"low"}"></div>
-    <div class="task-body">
+  return `<div class="task-card">
+    <div class="task-priority pri-${t.priority||"low"}" style="cursor:pointer;" onclick="showPage('${dest}')"></div>
+    <div class="task-body" style="cursor:pointer;" onclick="showPage('${dest}')">
       <div class="task-title">${t.title}</div>
       <div class="task-meta">
         <span class="tag ${tc}">${tl}</span>
@@ -457,7 +475,10 @@ function miniCard(t){
         ${t.due?`<span class="task-date">📅 ${t.due}</span>`:""}
       </div>
     </div>
-    <div style="color:var(--muted);font-size:.8rem;">›</div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <button class="btn btn-ghost btn-sm" onclick="shareTask('${t.id}')" title="Share task" style="padding:4px 8px;font-size:.7rem;">🔗</button>
+      <div style="color:var(--muted);font-size:.8rem;cursor:pointer;" onclick="showPage('${dest}')">›</div>
+    </div>
   </div>`;
 }
 
@@ -760,6 +781,9 @@ function taskActionBtns(t){
     </button>
     <button class="btn btn-ghost btn-sm" onclick="openFollowUpModal('${t.id}')">
       🔁 Follow-up ${hasFollowUp?'<span class="followup-badge">linked</span>':""}
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="shareTask('${t.id}')">
+      🔗 Share
     </button>
   </div>`;
 }
@@ -1584,6 +1608,99 @@ window.createFollowUp = async () => {
   $("followup-save-btn").textContent="Create Follow-up";
 };
 
+// ── SHARE TASK ───────────────────────────────────
+window.shareTask = async (taskId) => {
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  const baseUrl = window.location.origin + window.location.pathname;
+  const shareUrl = `${baseUrl}?task=${taskId}`;
+
+  // Build share message
+  const typeLabel={assigned:"Assigned Task",pool:"Open Pool Task",private:"Private Task"}[t.type]||"Task";
+  const priEmoji={high:"🔴",medium:"🟡",low:"🟢"}[t.priority||"low"]||"⚡";
+  const msg = `${priEmoji} *Atubre Task Flow*\n\n*${t.title}*\n${t.type==="pool"?"🌊 Open Pool — anyone can claim this":""}${t.desc?`\n\n${t.desc.substr(0,200)}${t.desc.length>200?"...":""}`:""}${t.due?`\n\n📅 Due: ${t.due}`:""}\n\n👉 Open task: ${shareUrl}`;
+
+  // Try native share (mobile) first
+  if(navigator.share){
+    try {
+      await navigator.share({ title: `Atubre Task: ${t.title}`, text: msg, url: shareUrl });
+      return;
+    } catch(e){ if(e.name==="AbortError") return; }
+  }
+
+  // Fallback — show share modal
+  $("share-url-input").value=shareUrl;
+  $("share-whatsapp-btn").href=`https://wa.me/?text=${encodeURIComponent(msg)}`;
+  $("share-task-name").textContent=t.title;
+  $("share-modal").classList.add("open");
+};
+
+window.copyShareLink = () => {
+  const input=$("share-url-input");
+  input.select();
+  input.setSelectionRange(0,9999);
+  try { document.execCommand("copy"); toast("Link copied! ✓","success"); }
+  catch(e){ navigator.clipboard.writeText(input.value).then(()=>toast("Link copied! ✓","success")); }
+};
+
+// ── TASK DETAIL MODAL ─────────────────────────────
+window.openTaskDetailModal = (taskId) => {
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  const typeLabel={assigned:"👤 Assigned",pool:"🌊 Open Pool",private:"🔒 Private"}[t.type]||t.type;
+  const typeCls={assigned:"tag-cyan",pool:"tag-gold",private:"tag-purple"}[t.type]||"tag-gray";
+  const subs=t.subtasks||[];
+  const comments=t.comments||[];
+  const uploads=t.uploads||[];
+
+  $("detail-modal-body").innerHTML=`
+    <div style="margin-bottom:16px;">
+      <div style="font-size:1.1rem;font-weight:600;margin-bottom:8px;">${t.title}</div>
+      <div class="task-meta" style="margin-bottom:10px;">
+        <span class="tag ${typeCls}">${typeLabel}</span>
+        ${t.tag?`<span class="tag tag-soft">${t.tag}</span>`:""}
+        <span class="pri-tag-${t.priority||"low"}">${t.priority} priority</span>
+        ${t.due?`<span class="task-date">📅 ${t.due}</span>`:""}
+        ${t.status==="completed"?`<span class="tag tag-green">✓ Completed</span>`:`<span class="tag tag-gold">${t.status}</span>`}
+      </div>
+      ${t.desc?`<div style="background:var(--card);border-radius:10px;padding:12px 14px;font-size:.85rem;color:var(--soft);line-height:1.6;margin-bottom:12px;">${t.desc}</div>`:""}
+    </div>
+    ${subs.length>0?`
+      <div style="margin-bottom:14px;">
+        <div class="section-title" style="margin-top:0;">Steps (${subs.filter(s=>s.done).length}/${subs.length})</div>
+        ${subs.map(s=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(0,229,255,.06);">
+          <span style="font-size:.9rem;">${s.done?"✅":"⬜"}</span>
+          <span style="font-size:.84rem;${s.done?"text-decoration:line-through;color:var(--muted);":""}">${s.text}</span>
+        </div>`).join("")}
+      </div>`:""}
+    ${comments.length>0?`
+      <div style="margin-bottom:14px;">
+        <div class="section-title" style="margin-top:0;">Field Notes (${comments.length})</div>
+        ${[...comments].reverse().slice(0,3).map(c=>`
+          <div style="background:var(--card);border-radius:9px;padding:9px 12px;margin-bottom:6px;font-size:.82rem;">
+            <strong>${c.userName}</strong> <span style="color:var(--muted);font-size:.72rem;">${fmt(c.createdAt)}</span>
+            <div style="margin-top:4px;color:var(--soft);">${c.text}</div>
+          </div>`).join("")}
+        ${comments.length>3?`<div style="color:var(--muted);font-size:.75rem;text-align:center;">${comments.length-3} more note(s)...</div>`:""}
+      </div>`:""}
+    ${uploads.length>0?`
+      <div style="margin-bottom:14px;">
+        <div class="section-title" style="margin-top:0;">Files (${uploads.length})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${uploads.slice(0,4).map(u=>u.type?.startsWith("image")?
+            `<img src="${u.url}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1px solid rgba(0,229,255,.2);cursor:pointer;" onclick="openLightbox('${u.url}')">`:
+            `<div style="background:var(--card);border-radius:8px;padding:7px 10px;font-size:.75rem;color:var(--soft);">📄 ${u.name}</div>`
+          ).join("")}
+          ${uploads.length>4?`<div style="color:var(--muted);font-size:.75rem;display:flex;align-items:center;">+${uploads.length-4} more</div>`:""}
+        </div>
+      </div>`:""}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,229,255,.08);">
+      <button class="btn btn-ghost btn-sm" onclick="openSubtaskModal('${t.id}');closeModal('detail-modal');">📋 Steps</button>
+      <button class="btn btn-ghost btn-sm" onclick="openCommentsModal('${t.id}');closeModal('detail-modal');">💬 Notes</button>
+      <button class="btn btn-ghost btn-sm" onclick="shareTask('${t.id}')">🔗 Share</button>
+    </div>`;
+
+  $("detail-modal").classList.add("open");
+};
+
 // ── CANCEL ACCEPT (assigned) ─────────────────────
 window.cancelAccept = async id => {
   const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
@@ -2263,6 +2380,41 @@ select option{background:#0d0f16;}
       <button class="btn btn-ghost btn-sm" onclick="closeModal('report-modal')">✕ Close</button>
     </div>
     <div id="report-body"></div>
+  </div>
+</div>
+
+<!-- SHARE TASK MODAL -->
+<div class="modal-overlay" id="share-modal">
+  <div class="modal" style="width:440px;text-align:center;">
+    <h3 style="margin-bottom:6px;">🔗 SHARE TASK</h3>
+    <div id="share-task-name" style="color:var(--soft);font-size:.85rem;margin-bottom:20px;font-family:'Inter',sans-serif;"></div>
+    <div style="background:var(--card);border-radius:12px;padding:14px;margin-bottom:16px;">
+      <label style="text-align:left;display:block;">Task Link</label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" id="share-url-input" readonly style="margin:0;font-size:.78rem;color:var(--cyan);background:var(--bg);">
+        <button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="copyShareLink()">📋 Copy</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <a id="share-whatsapp-btn" href="" target="_blank" class="btn btn-green btn-sm" style="text-decoration:none;">
+        💬 Share on WhatsApp
+      </a>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('share-modal')">Close</button>
+    </div>
+    <div style="color:var(--muted);font-size:.72rem;margin-top:14px;line-height:1.5;">
+      Recipient must be logged into Atubre Task Flow to view the task
+    </div>
+  </div>
+</div>
+
+<!-- TASK DETAIL MODAL -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal" style="width:560px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <h3 style="margin:0;">TASK DETAILS</h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('detail-modal')">✕ Close</button>
+    </div>
+    <div id="detail-modal-body"></div>
   </div>
 </div>
 
