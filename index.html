@@ -113,7 +113,7 @@ function mediaPreviewHTML(uploads, taskId) {
     } else {
       return `<div class="media-item media-doc">
         <div class="media-item-top">
-          <a href="${u.url}" target="_blank" class="doc-link">${fileIcon(u.type)} ${u.name}</a>
+          <a href="${u.url.replace('/upload/', '/upload/fl_attachment/')}" download="${u.name}" class="doc-link">${fileIcon(u.type)} ${u.name} ⬇</a>
           ${delBtn}
         </div>
         <div class="media-meta">${u.uploadedBy} · ${fmt(u.uploadedAt)}</div>
@@ -1763,7 +1763,7 @@ function renderIntelList() {
         <div class="intel-media">
           ${isImage ? `<img src="${item.fileUrl}" class="intel-img" onclick="openLightbox('${item.fileUrl}')">` :
             isVideo ? `<video src="${item.fileUrl}" controls class="intel-video"></video>` :
-            `<a href="${item.fileUrl}" target="_blank" class="intel-doc-link">${fileIcon} ${item.fileName||"View File"}</a>`}
+            `<a href="${item.fileUrl.replace('/upload/', '/upload/fl_attachment/')}" download="${item.fileName||'document'}" class="intel-doc-link">${fileIcon} ${item.fileName||"Download File"} ⬇</a>`}
         </div>` : ""}
     </div>`;
   }).join("");
