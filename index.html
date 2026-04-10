@@ -1751,6 +1751,14 @@ function renderIntelList() {
         <div style="flex:1;">
           <div class="intel-title">${item.title}</div>
           ${item.note?`<div class="intel-note">${item.note}</div>`:""}
+        ${item.link?`<div style="margin-top:10px;">
+          <a href="${item.link}" target="_blank" 
+             style="display:inline-flex;align-items:center;gap:8px;background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.3);border-radius:10px;padding:9px 16px;color:var(--cyan);text-decoration:none;font-size:.82rem;font-family:'Inter',sans-serif;transition:all .2s;"
+             onmouseover="this.style.background='rgba(0,229,255,.15)'"
+             onmouseout="this.style.background='rgba(0,229,255,.08)'">
+            📄 Open Report
+          </a>
+        </div>`:""}
           <div class="intel-meta">
             <span style="color:var(--cyan);font-size:.7rem;">🔐 Admin Only</span>
             <span class="task-date">By ${item.postedBy}</span>
@@ -1772,6 +1780,7 @@ function renderIntelList() {
 window.openIntelUpload = () => {
   $("intel-title-input").value = "";
   $("intel-note-input").value = "";
+  $("intel-link-input").value = "";
   $("intel-file-input").value = "";
   $("intel-file-preview").innerHTML = "";
   $("intel-upload-status").textContent = "";
@@ -1811,6 +1820,7 @@ window.saveIntel = async () => {
     await addDoc(collection(db,"intel"), {
       title,
       note: $("intel-note-input").value.trim(),
+      link: $("intel-link-input").value.trim(),
       fileUrl, fileName, fileType,
       postedBy: cu.name,
       postedById: cu.id,
@@ -2653,6 +2663,8 @@ select option{background:#0d0f16;}
     <input type="text" id="intel-title-input" placeholder="e.g. New site opportunity — Nakawa Market">
     <label>Notes</label>
     <textarea id="intel-note-input" rows="3" placeholder="Add context, observations, or instructions..."></textarea>
+    <label>Link (optional — paste a URL to a report, doc or webpage)</label>
+    <input type="text" id="intel-link-input" placeholder="https://redfincasas.github.io/atubre-taskflow/report.pdf">
     <label>Attach File (photo, video, PDF)</label>
     <input type="file" id="intel-file-input" accept="image/*,video/*,.pdf,.doc,.docx" style="display:none" onchange="previewIntelFile()">
     <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:8px;" onclick="document.getElementById('intel-file-input').click()">
