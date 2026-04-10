@@ -1,5 +1,6 @@
 
 <!DOCTYPE html>
+<!-- © 2026 Atubre Co. Limited · All Rights Reserved · Atubre Task Flow · Unauthorised reproduction prohibited -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1163,6 +1164,62 @@ window.openStatModal = (filter) => {
   $("stat-modal-title").textContent = title + ` (${filtered.length})`;
   $("stat-modal-title").style.color = color;
   $("stat-modal").classList.add("open");
+};
+
+window.shareStatReport = async () => {
+  const title = $("stat-modal-title").textContent;
+  const T = window._tasks || [];
+  const uid = cu.id;
+  const isAdmin = cu.role === "admin";
+
+  // Rebuild the filtered list based on current title
+  let filtered = isAdmin ? T : T.filter(t=>
+    (t.assignees||[]).includes(uid)||t.type==="pool"||
+    (t.type==="private"&&(t.ownerId===uid||(t.sharedWith||[]).includes(uid)))
+  );
+  if(title.includes("Pending"))       filtered = filtered.filter(t=>t.status==="pending");
+  else if(title.includes("Progress")) filtered = filtered.filter(t=>t.status==="accepted");
+  else if(title.includes("Completed"))filtered = filtered.filter(t=>t.status==="completed");
+
+  const date = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+  const appUrl = "https://redfincasas.github.io/atubre-taskflow";
+
+  // Build summary message
+  let msg = `⚡ *Atubre Task Flow*\n`;
+  msg += `*${title}*\n`;
+  msg += `📅 ${date}\n\n`;
+
+  filtered.slice(0,10).forEach((t,i) => {
+    const pri = {high:"🔴",medium:"🟡",low:"🟢"}[t.priority||"low"];
+    const type = {assigned:"👤",pool:"🌊",private:"🔒"}[t.type]||"📋";
+    msg += `${i+1}. ${pri} ${type} *${t.title}*`;
+    if(t.due) msg += ` · 📅 ${t.due}`;
+    msg += `\n`;
+  });
+
+  if(filtered.length > 10) msg += `\n...and ${filtered.length - 10} more tasks`;
+  msg += `\n\n👉 View in app: ${appUrl}`;
+
+  // Try native share first (mobile)
+  if(navigator.share){
+    try {
+      await navigator.share({ title: `Atubre Task Flow — ${title}`, text: msg });
+      return;
+    } catch(e){ if(e.name==="AbortError") return; }
+  }
+
+  // Fallback — show share options modal
+  $("stat-share-text").value = msg;
+  $("stat-whatsapp-btn").href = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  $("stat-share-modal").classList.add("open");
+};
+
+window.copyStatText = () => {
+  const input = $("stat-share-text");
+  input.select();
+  input.setSelectionRange(0,9999);
+  try { document.execCommand("copy"); toast("Copied to clipboard ✓","success"); }
+  catch(e){ navigator.clipboard.writeText(input.value).then(()=>toast("Copied ✓","success")); }
 };
 
 window.openCompletedReport = () => {
@@ -2644,11 +2701,37 @@ select option{background:#0d0f16;}
 <!-- STAT MODAL — clickable dashboard cards -->
 <div class="modal-overlay" id="stat-modal">
   <div class="modal" style="width:580px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px;">
       <h3 id="stat-modal-title" style="margin:0;"></h3>
-      <button class="btn btn-ghost btn-sm" onclick="closeModal('stat-modal')">✕ Close</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="shareStatReport()" style="color:var(--green);border-color:rgba(0,255,179,.3);">🔗 Share</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('stat-modal')">✕ Close</button>
+      </div>
     </div>
     <div id="stat-modal-body" style="max-height:60vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- STAT SHARE MODAL -->
+<div class="modal-overlay" id="stat-share-modal">
+  <div class="modal" style="width:460px;">
+    <h3 style="margin-bottom:16px;">🔗 SHARE REPORT</h3>
+    <div style="margin-bottom:14px;">
+      <label>Message Preview</label>
+      <textarea id="stat-share-text" rows="8" readonly style="font-size:.78rem;line-height:1.6;background:var(--card);color:var(--soft);resize:none;"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:14px;">
+      <a id="stat-whatsapp-btn" href="" target="_blank"
+         class="btn btn-green btn-sm" style="text-decoration:none;min-width:160px;">
+        💬 Share on WhatsApp
+      </a>
+      <button class="btn btn-ghost btn-sm" style="min-width:120px;" onclick="copyStatText()">
+        📋 Copy Text
+      </button>
+    </div>
+    <div style="text-align:center;">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('stat-share-modal')">Close</button>
+    </div>
   </div>
 </div>
 
@@ -2721,5 +2804,6 @@ select option{background:#0d0f16;}
 </div>
 
 <div id="toast" class="toast"></div>
+<div style="background:#040507;border-top:1px solid rgba(0,229,255,.08);padding:10px 24px;text-align:center;font-size:.68rem;color:#3a5a62;font-family:'Orbitron',sans-serif;letter-spacing:.08em;">© 2026 <span style="color:rgba(0,229,255,.4);">ATUBRE CO. LIMITED</span> · ALL RIGHTS RESERVED · ATUBRE TASK FLOW</div>
 </body>
 </html>
