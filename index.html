@@ -310,6 +310,7 @@ function initApp() {
   document.querySelectorAll(".admin-only").forEach(el=>el.style.display=cu.role==="admin"?"":"none");
   document.querySelectorAll(".member-only").forEach(el=>el.style.display=cu.role==="member"?"":"none");
   subscribeAll();
+  subscribeIntel();
   // Check for deep link task ID in URL
   const urlParams = new URLSearchParams(window.location.search);
   const deepTaskId = urlParams.get("task");
@@ -435,16 +436,31 @@ function renderDashboard(T){
   const completedCount=vis.filter(t=>t.status==="completed").length;
   const pendingCount=vis.filter(t=>t.status==="pending").length;
   const inProgressCount=vis.filter(t=>t.status==="accepted").length;
+  const tapHint=`<div style="font-size:.6rem;margin-top:4px;font-family:Orbitron,sans-serif;letter-spacing:.05em;opacity:.7;">TAP TO VIEW ›</div>`;
   $("stats-row").innerHTML=`
-    <div class="stat-card cyan"><div class="stat-num">${vis.length}</div><div class="stat-label">Total Tasks</div></div>
-    <div class="stat-card gold"><div class="stat-num">${pendingCount}</div><div class="stat-label">Pending</div></div>
-    <div class="stat-card blue"><div class="stat-num">${inProgressCount}</div><div class="stat-label">In Progress</div></div>
-    <div class="stat-card green ${cu.role==='admin'?'clickable-stat':''}" ${cu.role==='admin'?'onclick="openCompletedReport()" title="Click to view completion report"':''}>
+    <div class="stat-card cyan clickable-stat" onclick="openStatModal('all')" title="View all tasks">
+      <div class="stat-num">${vis.length}</div>
+      <div class="stat-label">Total Tasks</div>
+      ${tapHint}
+    </div>
+    <div class="stat-card gold clickable-stat" onclick="openStatModal('pending')" title="View pending tasks">
+      <div class="stat-num">${pendingCount}</div>
+      <div class="stat-label">Pending</div>
+      ${tapHint}
+    </div>
+    <div class="stat-card blue clickable-stat" onclick="openStatModal('inprogress')" title="View in progress tasks">
+      <div class="stat-num">${inProgressCount}</div>
+      <div class="stat-label">In Progress</div>
+      ${tapHint}
+    </div>
+    <div class="stat-card green clickable-stat" onclick="${cu.role==='admin'?'openCompletedReport()':'openStatModal(\'completed\')'}" title="View completed tasks">
       <div class="stat-num">${completedCount}</div>
       <div class="stat-label">Completed</div>
-      ${cu.role==='admin'?'<div style="font-size:.65rem;color:var(--green);margin-top:4px;font-family:Orbitron,sans-serif;letter-spacing:.05em;">TAP TO VIEW ›</div>':''}
+      ${tapHint}
     </div>`;
   $("dash-recent").innerHTML=vis.slice(0,5).map(t=>miniCard(t)).join("")||empty("📭","No tasks yet");
+  // Render intel section for admins
+  if(cu.role==="admin") renderIntelList();
   const myOpen=T.filter(t=>(t.assignees||[]).includes(cu.id)&&t.status!=="completed").length;
   const poolOpen=T.filter(t=>t.type==="pool"&&t.status!=="completed"&&!(t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt)).length;
   const myInProgress=T.filter(t=>{
@@ -1060,6 +1076,95 @@ window.saveTask = async () => {
 };
 
 // ── COMPLETED REPORT ──────────────────────────────
+window.openStatModal = (filter) => {
+  const T = window._tasks || [];
+  const isAdmin = cu.role === "admin";
+  const uid = cu.id;
+
+  // Get tasks visible to current user
+  let vis = isAdmin ? T : T.filter(t=>
+    (t.assignees||[]).includes(uid)||t.type==="pool"||
+    (t.type==="private"&&(t.ownerId===uid||(t.sharedWith||[]).includes(uid)))
+  );
+
+  // Apply filter
+  let filtered = vis;
+  let title = "All Tasks";
+  let color = "var(--cyan)";
+  if(filter==="pending"){
+    filtered = vis.filter(t=>t.status==="pending");
+    title = "⏳ Pending Tasks";
+    color = "var(--gold)";
+  } else if(filter==="inprogress"){
+    filtered = vis.filter(t=>t.status==="accepted");
+    title = "⚡ In Progress";
+    color = "#4488ff";
+  } else if(filter==="completed"){
+    filtered = vis.filter(t=>t.status==="completed");
+    title = "✅ Completed Tasks";
+    color = "var(--green)";
+  }
+
+  if(!filtered.length){
+    $("stat-modal-body").innerHTML = empty("🎉","No tasks in this category yet");
+    $("stat-modal-title").textContent = title;
+    $("stat-modal-title").style.color = color;
+    $("stat-modal").classList.add("open");
+    return;
+  }
+
+  const typeLabel = t => ({assigned:"👤 Assigned",pool:"🌊 Pool",private:"🔒 Private"}[t.type]||t.type);
+  const typeCls   = t => ({assigned:"tag-cyan",pool:"tag-gold",private:"tag-purple"}[t.type]||"tag-gray");
+  const stCls     = t => ({pending:"tag-gray",accepted:"tag-gold",completed:"tag-green"}[t.status]||"tag-gray");
+
+  $("stat-modal-body").innerHTML = filtered.map(t => {
+    const subs = t.subtasks||[];
+    const comments = t.comments||[];
+    const uploads = t.uploads||[];
+    const progressBar = subs.length>0 ? `
+      <div style="display:flex;align-items:center;gap:6px;margin-top:5px;">
+        <div style="background:rgba(0,229,255,.1);border-radius:20px;height:4px;width:60px;overflow:hidden;">
+          <div style="background:var(--cyan);height:100%;width:${Math.round(subs.filter(s=>s.done).length/subs.length*100)}%;border-radius:20px;"></div>
+        </div>
+        <span style="font-size:.7rem;color:var(--soft);">${subs.filter(s=>s.done).length}/${subs.length} steps</span>
+      </div>` : "";
+
+    // Timestamps for completed
+    let timestamps = "";
+    if(t.status==="completed"){
+      if(t.type==="assigned"&&(t.completedBy||[]).length>0)
+        timestamps = t.completedBy.map(c=>`<div class="time-stamp done" style="margin-top:4px;">✅ ${c.name} — ${fmt(c.completedAt)}</div>`).join("");
+      else if(t.type==="pool"&&(t.claims||[]).filter(c=>c.completedAt).length>0)
+        timestamps = t.claims.filter(c=>c.completedAt).map(c=>`<div class="time-stamp done" style="margin-top:4px;">✅ ${c.name} — ${fmt(c.completedAt)}</div>`).join("");
+      else if(t.completedAt)
+        timestamps = `<div class="time-stamp done" style="margin-top:4px;">✅ ${fmt(t.completedAt)}</div>`;
+    }
+
+    return `<div class="report-card" style="cursor:pointer;" onclick="closeModal('stat-modal');openTaskDetailModal('${t.id}')">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+        <div style="flex:1;">
+          <div class="report-title">${t.title}</div>
+          <div class="task-meta" style="margin-top:5px;">
+            <span class="tag ${typeCls(t)}">${typeLabel(t)}</span>
+            <span class="tag ${stCls(t)}">${t.status}</span>
+            ${t.tag?`<span class="tag tag-soft">${t.tag}</span>`:""}
+            ${t.due?`<span class="task-date">📅 ${t.due}</span>`:""}
+            ${uploads.length>0?`<span class="task-date">📎 ${uploads.length}</span>`:""}
+            ${comments.length>0?`<span class="task-date">💬 ${comments.length}</span>`:""}
+          </div>
+          ${progressBar}
+          ${timestamps}
+        </div>
+        <div style="color:var(--muted);font-size:.8rem;flex-shrink:0;">›</div>
+      </div>
+    </div>`;
+  }).join("");
+
+  $("stat-modal-title").textContent = title + ` (${filtered.length})`;
+  $("stat-modal-title").style.color = color;
+  $("stat-modal").classList.add("open");
+};
+
 window.openCompletedReport = () => {
   if(cu.role!=="admin"){ toast("Completion report is for admins only","error"); return; }
   const T = window._tasks || [];
@@ -1608,6 +1713,123 @@ window.createFollowUp = async () => {
   $("followup-save-btn").textContent="Create Follow-up";
 };
 
+// ══════════════════════════════════════════════════
+// ── LATEST INTEL ──────────────────────────────────
+// ══════════════════════════════════════════════════
+let intelUnsub = null;
+
+function subscribeIntel() {
+  if(cu.role !== "admin") return;
+  if(intelUnsub) intelUnsub();
+  const q = query(collection(db,"intel"), orderBy("createdAt","desc"));
+  intelUnsub = onSnapshot(q, snap => {
+    window._intel = snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderIntelList();
+  });
+  unsubs.push(intelUnsub);
+}
+
+function renderIntelList() {
+  if(cu.role !== "admin") return;
+  const el = $("intel-list");
+  if(!el) return;
+  const items = window._intel || [];
+  if(!items.length){
+    el.innerHTML = `<div style="background:rgba(0,229,255,.03);border:1px dashed rgba(0,229,255,.15);border-radius:12px;padding:20px;text-align:center;color:var(--muted);font-size:.82rem;">
+      No intel posted yet — click <strong style="color:var(--cyan);">＋ Add Intel</strong> to post something
+    </div>`;
+    return;
+  }
+  el.innerHTML = items.map(item => {
+    const fileIcon = item.fileType?.startsWith("image") ? "🖼️" :
+                     item.fileType?.startsWith("video") ? "🎥" :
+                     item.fileType?.includes("pdf") ? "📄" : "📎";
+    const isImage = item.fileType?.startsWith("image");
+    const isVideo = item.fileType?.startsWith("video");
+    return `<div class="intel-card">
+      <div class="intel-card-top">
+        <div style="flex:1;">
+          <div class="intel-title">${item.title}</div>
+          ${item.note?`<div class="intel-note">${item.note}</div>`:""}
+          <div class="intel-meta">
+            <span style="color:var(--cyan);font-size:.7rem;">🔐 Admin Only</span>
+            <span class="task-date">By ${item.postedBy}</span>
+            <span class="task-date">${fmt(item.createdAt)}</span>
+          </div>
+        </div>
+        <button onclick="deleteIntel('${item.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;padding:4px 6px;flex-shrink:0;" title="Delete">🗑️</button>
+      </div>
+      ${item.fileUrl ? `
+        <div class="intel-media">
+          ${isImage ? `<img src="${item.fileUrl}" class="intel-img" onclick="openLightbox('${item.fileUrl}')">` :
+            isVideo ? `<video src="${item.fileUrl}" controls class="intel-video"></video>` :
+            `<a href="${item.fileUrl}" target="_blank" class="intel-doc-link">${fileIcon} ${item.fileName||"View File"}</a>`}
+        </div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+window.openIntelUpload = () => {
+  $("intel-title-input").value = "";
+  $("intel-note-input").value = "";
+  $("intel-file-input").value = "";
+  $("intel-file-preview").innerHTML = "";
+  $("intel-upload-status").textContent = "";
+  $("intel-modal").classList.add("open");
+};
+
+window.previewIntelFile = () => {
+  const file = $("intel-file-input").files[0];
+  if(!file) return;
+  const prev = $("intel-file-preview");
+  if(file.type.startsWith("image")){
+    const url = URL.createObjectURL(file);
+    prev.innerHTML = `<img src="${url}" style="max-width:100%;max-height:160px;border-radius:10px;border:1px solid rgba(0,229,255,.2);margin-top:8px;">`;
+  } else {
+    prev.innerHTML = `<div style="background:var(--card);border-radius:8px;padding:8px 12px;font-size:.8rem;color:var(--soft);margin-top:8px;">${file.type.startsWith("video")?"🎥":"📄"} ${file.name}</div>`;
+  }
+};
+
+window.saveIntel = async () => {
+  const title = $("intel-title-input").value.trim();
+  if(!title) return toast("Please enter a title for this intel","error");
+  const file = $("intel-file-input").files[0];
+  $("intel-save-btn").textContent = "Saving...";
+  try {
+    let fileUrl = null, fileName = null, fileType = null;
+    if(file){
+      $("intel-save-btn").textContent = "Uploading file...";
+      $("intel-upload-status").textContent = "Uploading...";
+      const result = await uploadToCloudinary(file, pct => {
+        $("intel-upload-status").textContent = `Uploading... ${pct}%`;
+      });
+      fileUrl = result.secure_url;
+      fileName = file.name;
+      fileType = file.type;
+      $("intel-upload-status").textContent = "";
+    }
+    await addDoc(collection(db,"intel"), {
+      title,
+      note: $("intel-note-input").value.trim(),
+      fileUrl, fileName, fileType,
+      postedBy: cu.name,
+      postedById: cu.id,
+      adminOnly: true,
+      createdAt: serverTimestamp()
+    });
+    await logAct(`${cu.name} posted intel: "${title}"`, "create", null);
+    toast("Intel posted 🔐","success");
+    closeModal("intel-modal");
+  } catch(e){ toast("Error: "+e.message,"error"); }
+  $("intel-save-btn").textContent = "Post Intel";
+};
+
+window.deleteIntel = async (id) => {
+  if(!confirm("Delete this intel post?")) return;
+  await deleteDoc(doc(db,"intel",id));
+  toast("Deleted","info");
+};
+
 // ── SHARE TASK ───────────────────────────────────
 window.shareTask = async (taskId) => {
   const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
@@ -1978,7 +2200,11 @@ select option{background:#0d0f16;}
 @media(max-width:900px){.pri-filter-panel{display:none;}}
 /* REPORT MODAL */
 .clickable-stat{cursor:pointer;transition:all .2s;}
-.clickable-stat:hover{border-color:var(--green);box-shadow:0 0 20px rgba(0,255,179,.15);transform:translateY(-2px);}
+.clickable-stat:hover{transform:translateY(-2px);box-shadow:0 0 20px rgba(0,229,255,.12);}
+.stat-card.cyan.clickable-stat:hover{border-color:var(--cyan);box-shadow:0 0 20px rgba(0,229,255,.2);}
+.stat-card.gold.clickable-stat:hover{border-color:var(--gold);box-shadow:0 0 20px rgba(255,193,7,.2);}
+.stat-card.blue.clickable-stat:hover{border-color:#4488ff;box-shadow:0 0 20px rgba(68,136,255,.2);}
+.stat-card.green.clickable-stat:hover{border-color:var(--green);box-shadow:0 0 20px rgba(0,255,179,.2);}
 .report-card{background:var(--card);border:1px solid rgba(0,229,255,.1);border-radius:14px;padding:16px 18px;margin-bottom:12px;}
 .report-card-header{margin-bottom:10px;}
 .report-title{font-weight:600;font-size:.95rem;margin-bottom:4px;}
@@ -1998,6 +2224,19 @@ select option{background:#0d0f16;}
 .action-btns-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,229,255,.06);}
 .followup-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(179,136,255,.12);color:var(--purple);border:1px solid rgba(179,136,255,.25);border-radius:20px;font-size:.66rem;padding:2px 9px;font-family:'Orbitron',sans-serif;font-weight:600;}
 .subtask-progress-inline{display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--soft);}
+/* LATEST INTEL */
+.intel-card{background:var(--surface);border:1px solid rgba(0,229,255,.15);border-radius:14px;padding:16px 18px;margin-bottom:10px;transition:all .2s;}
+.intel-card:hover{border-color:rgba(0,229,255,.3);box-shadow:0 0 16px rgba(0,229,255,.06);}
+.intel-card-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;}
+.intel-title{font-weight:600;font-size:.95rem;margin-bottom:4px;color:var(--text);}
+.intel-note{font-size:.83rem;color:var(--soft);line-height:1.55;margin-top:4px;}
+.intel-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;}
+.intel-media{margin-top:8px;}
+.intel-img{max-width:100%;max-height:240px;border-radius:10px;border:1px solid rgba(0,229,255,.2);cursor:pointer;transition:all .2s;object-fit:cover;}
+.intel-img:hover{border-color:var(--cyan);box-shadow:0 0 14px rgba(0,229,255,.2);}
+.intel-video{max-width:100%;border-radius:10px;border:1px solid rgba(0,229,255,.2);}
+.intel-doc-link{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:1px solid rgba(0,229,255,.15);border-radius:10px;padding:10px 14px;color:var(--cyan);font-size:.84rem;text-decoration:none;transition:all .2s;}
+.intel-doc-link:hover{border-color:var(--cyan);background:rgba(0,229,255,.06);}
 /* LIGHTBOX */
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:300;display:none;align-items:center;justify-content:center;}
 .lightbox.open{display:flex;}
@@ -2124,6 +2363,15 @@ select option{background:#0d0f16;}
         <div class="stats-row" id="stats-row"></div>
         <div class="section-title">Recent Tasks</div>
         <div id="dash-recent" class="tasks-grid"></div>
+
+        <!-- LATEST INTEL — ADMIN ONLY -->
+        <div id="intel-section" class="admin-only" style="margin-top:28px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div class="section-title" style="margin:0;">🔐 Latest Intel</div>
+            <button class="btn btn-ghost btn-sm admin-only" onclick="openIntelUpload()" style="font-size:.65rem;">＋ Add Intel</button>
+          </div>
+          <div id="intel-list"></div>
+        </div>
       </div>
 
       <div class="page" id="page-my-tasks">
@@ -2380,6 +2628,42 @@ select option{background:#0d0f16;}
       <button class="btn btn-ghost btn-sm" onclick="closeModal('report-modal')">✕ Close</button>
     </div>
     <div id="report-body"></div>
+  </div>
+</div>
+
+<!-- STAT MODAL — clickable dashboard cards -->
+<div class="modal-overlay" id="stat-modal">
+  <div class="modal" style="width:580px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <h3 id="stat-modal-title" style="margin:0;"></h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('stat-modal')">✕ Close</button>
+    </div>
+    <div id="stat-modal-body" style="max-height:60vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- INTEL MODAL -->
+<div class="modal-overlay" id="intel-modal">
+  <div class="modal" style="width:500px;">
+    <h3>🔐 POST INTEL</h3>
+    <div style="background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.12);border-radius:10px;padding:10px 14px;margin-bottom:18px;font-size:.78rem;color:var(--muted);">
+      Only visible to admins — never shown to team members
+    </div>
+    <label>Title *</label>
+    <input type="text" id="intel-title-input" placeholder="e.g. New site opportunity — Nakawa Market">
+    <label>Notes</label>
+    <textarea id="intel-note-input" rows="3" placeholder="Add context, observations, or instructions..."></textarea>
+    <label>Attach File (photo, video, PDF)</label>
+    <input type="file" id="intel-file-input" accept="image/*,video/*,.pdf,.doc,.docx" style="display:none" onchange="previewIntelFile()">
+    <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:8px;" onclick="document.getElementById('intel-file-input').click()">
+      📸 Attach Photo / Video / Document
+    </button>
+    <div id="intel-file-preview"></div>
+    <div id="intel-upload-status" style="font-size:.75rem;color:var(--cyan);margin-bottom:8px;"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('intel-modal')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveIntel()" id="intel-save-btn">🔐 Post Intel</button>
+    </div>
   </div>
 </div>
 
