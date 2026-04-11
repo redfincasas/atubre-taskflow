@@ -1141,9 +1141,9 @@ window.openStatModal = (filter) => {
         timestamps = `<div class="time-stamp done" style="margin-top:4px;">✅ ${fmt(t.completedAt)}</div>`;
     }
 
-    return `<div class="report-card" style="cursor:pointer;" onclick="closeModal('stat-modal');openTaskDetailModal('${t.id}')">
+    return `<div class="report-card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
-        <div style="flex:1;">
+        <div style="flex:1;cursor:pointer;" onclick="closeModal('stat-modal');openTaskDetailModal('${t.id}')">
           <div class="report-title">${t.title}</div>
           <div class="task-meta" style="margin-top:5px;">
             <span class="tag ${typeCls(t)}">${typeLabel(t)}</span>
@@ -1156,7 +1156,10 @@ window.openStatModal = (filter) => {
           ${progressBar}
           ${timestamps}
         </div>
-        <div style="color:var(--muted);font-size:.8rem;flex-shrink:0;">›</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:.7rem;color:var(--green);border-color:rgba(0,255,179,.2);" onclick="event.stopPropagation();shareTask('${t.id}')">🔗</button>
+          <div style="color:var(--muted);font-size:.8rem;cursor:pointer;" onclick="closeModal('stat-modal');openTaskDetailModal('${t.id}')">›</div>
+        </div>
       </div>
     </div>`;
   }).join("");
@@ -2703,10 +2706,7 @@ select option{background:#0d0f16;}
   <div class="modal" style="width:580px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px;">
       <h3 id="stat-modal-title" style="margin:0;"></h3>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-ghost btn-sm" onclick="shareStatReport()" style="color:var(--green);border-color:rgba(0,255,179,.3);">🔗 Share</button>
-        <button class="btn btn-ghost btn-sm" onclick="closeModal('stat-modal')">✕ Close</button>
-      </div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('stat-modal')">✕ Close</button>
     </div>
     <div id="stat-modal-body" style="max-height:60vh;overflow-y:auto;"></div>
   </div>
