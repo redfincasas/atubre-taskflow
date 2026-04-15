@@ -1,5 +1,6 @@
+
 <!DOCTYPE html>
-<!-- © 2026 Atubre Co. Limited · All Rights Reserved · Atubre Task Flow · Unauthorised reproduction prohibited -->
+<!-- © 2026 Atubre Co. Limited · All Rights Reserved · Atubre Task Flow -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1140,36 +1141,9 @@ window.openStatModal = (filter) => {
         timestamps = `<div class="time-stamp done" style="margin-top:4px;">✅ ${fmt(t.completedAt)}</div>`;
     }
 
-    // Build who is working on this task
-    let whoHTML = "";
-    if(t.status==="accepted"){
-      if(t.type==="assigned" && (t.acceptedBy||[]).length>0){
-        whoHTML = t.acceptedBy.map(a=>`
-          <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
-            <div class="mini-avatar" style="width:20px;height:20px;font-size:.55rem;background:var(--cyan);color:#000;">${ini(a.name)}</div>
-            <span style="font-size:.78rem;color:var(--soft);">${a.name}</span>
-            <span style="font-size:.7rem;color:var(--muted);">⚡ started ${fmt(a.startedAt)}</span>
-          </div>`).join("");
-      } else if(t.type==="pool" && (t.claims||[]).filter(c=>!c.completedAt).length>0){
-        whoHTML = t.claims.filter(c=>!c.completedAt).map(c=>`
-          <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
-            <div class="mini-avatar" style="width:20px;height:20px;font-size:.55rem;background:var(--gold);color:#000;">${ini(c.name)}</div>
-            <span style="font-size:.78rem;color:var(--soft);">${c.name}</span>
-            <span style="font-size:.7rem;color:var(--muted);">⚡ started ${fmt(c.startedAt)}</span>
-          </div>`).join("");
-      } else if(t.type==="private" && (t.privateAcceptedBy||[]).length>0){
-        whoHTML = t.privateAcceptedBy.map(a=>`
-          <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
-            <div class="mini-avatar" style="width:20px;height:20px;font-size:.55rem;background:var(--purple);color:#fff;">${ini(a.name)}</div>
-            <span style="font-size:.78rem;color:var(--soft);">${a.name}</span>
-            <span style="font-size:.7rem;color:var(--muted);">⚡ started ${fmt(a.startedAt)}</span>
-          </div>`).join("");
-      }
-    }
-
-    return `<div class="report-card">
+    return `<div class="report-card" style="cursor:pointer;" onclick="closeModal('stat-modal');openTaskDetailModal('${t.id}')">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
-        <div style="flex:1;cursor:pointer;" onclick="closeModal('stat-modal');openTaskDetailModal('${t.id}')">
+        <div style="flex:1;">
           <div class="report-title">${t.title}</div>
           <div class="task-meta" style="margin-top:5px;">
             <span class="tag ${typeCls(t)}">${typeLabel(t)}</span>
@@ -1179,14 +1153,10 @@ window.openStatModal = (filter) => {
             ${uploads.length>0?`<span class="task-date">📎 ${uploads.length}</span>`:""}
             ${comments.length>0?`<span class="task-date">💬 ${comments.length}</span>`:""}
           </div>
-          ${whoHTML}
           ${progressBar}
           ${timestamps}
         </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-          <button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:.7rem;color:var(--green);border-color:rgba(0,255,179,.2);" onclick="event.stopPropagation();shareTask('${t.id}')">🔗</button>
-          <div style="color:var(--muted);font-size:.8rem;cursor:pointer;" onclick="closeModal('stat-modal');openTaskDetailModal('${t.id}')">›</div>
-        </div>
+        <div style="color:var(--muted);font-size:.8rem;flex-shrink:0;">›</div>
       </div>
     </div>`;
   }).join("");
@@ -1194,62 +1164,6 @@ window.openStatModal = (filter) => {
   $("stat-modal-title").textContent = title + ` (${filtered.length})`;
   $("stat-modal-title").style.color = color;
   $("stat-modal").classList.add("open");
-};
-
-window.shareStatReport = async () => {
-  const title = $("stat-modal-title").textContent;
-  const T = window._tasks || [];
-  const uid = cu.id;
-  const isAdmin = cu.role === "admin";
-
-  // Rebuild the filtered list based on current title
-  let filtered = isAdmin ? T : T.filter(t=>
-    (t.assignees||[]).includes(uid)||t.type==="pool"||
-    (t.type==="private"&&(t.ownerId===uid||(t.sharedWith||[]).includes(uid)))
-  );
-  if(title.includes("Pending"))       filtered = filtered.filter(t=>t.status==="pending");
-  else if(title.includes("Progress")) filtered = filtered.filter(t=>t.status==="accepted");
-  else if(title.includes("Completed"))filtered = filtered.filter(t=>t.status==="completed");
-
-  const date = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-  const appUrl = "https://redfincasas.github.io/atubre-taskflow";
-
-  // Build summary message
-  let msg = `⚡ *Atubre Task Flow*\n`;
-  msg += `*${title}*\n`;
-  msg += `📅 ${date}\n\n`;
-
-  filtered.slice(0,10).forEach((t,i) => {
-    const pri = {high:"🔴",medium:"🟡",low:"🟢"}[t.priority||"low"];
-    const type = {assigned:"👤",pool:"🌊",private:"🔒"}[t.type]||"📋";
-    msg += `${i+1}. ${pri} ${type} *${t.title}*`;
-    if(t.due) msg += ` · 📅 ${t.due}`;
-    msg += `\n`;
-  });
-
-  if(filtered.length > 10) msg += `\n...and ${filtered.length - 10} more tasks`;
-  msg += `\n\n👉 View in app: ${appUrl}`;
-
-  // Try native share first (mobile)
-  if(navigator.share){
-    try {
-      await navigator.share({ title: `Atubre Task Flow — ${title}`, text: msg });
-      return;
-    } catch(e){ if(e.name==="AbortError") return; }
-  }
-
-  // Fallback — show share options modal
-  $("stat-share-text").value = msg;
-  $("stat-whatsapp-btn").href = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-  $("stat-share-modal").classList.add("open");
-};
-
-window.copyStatText = () => {
-  const input = $("stat-share-text");
-  input.select();
-  input.setSelectionRange(0,9999);
-  try { document.execCommand("copy"); toast("Copied to clipboard ✓","success"); }
-  catch(e){ navigator.clipboard.writeText(input.value).then(()=>toast("Copied ✓","success")); }
 };
 
 window.openCompletedReport = () => {
@@ -1933,59 +1847,25 @@ window.shareTask = async (taskId) => {
   const baseUrl = window.location.origin + window.location.pathname;
   const shareUrl = `${baseUrl}?task=${taskId}`;
 
+  // Build share message
+  const typeLabel={assigned:"Assigned Task",pool:"Open Pool Task",private:"Private Task"}[t.type]||"Task";
   const priEmoji={high:"🔴",medium:"🟡",low:"🟢"}[t.priority||"low"]||"⚡";
-  const typeEmoji={assigned:"👤",pool:"🌊",private:"🔒"}[t.type]||"📋";
-  const statusLabel={pending:"⏳ Pending",accepted:"⚡ In Progress",completed:"✅ Completed"}[t.status]||t.status;
-
-  // Who is working on it
-  let whoLine = "";
-  if(t.status==="accepted" || t.status==="completed"){
-    if(t.type==="assigned" && (t.acceptedBy||[]).length>0){
-      const names = t.acceptedBy.map(a=>a.name + " (started: " + fmt(a.startedAt) + ")").join(", ");
-      whoLine += "\n👤 Accepted by: " + names;
-    } else if(t.type==="pool" && (t.claims||[]).filter(c=>!c.completedAt).length>0){
-      const active = (t.claims||[]).filter(c=>!c.completedAt);
-      const names = active.map(c=>c.name + " (started: " + fmt(c.startedAt) + ")").join(", ");
-      whoLine += "\n👤 Claimed by: " + names;
-    } else if(t.type==="private" && (t.privateAcceptedBy||[]).length>0){
-      const names = t.privateAcceptedBy.map(a=>a.name + " (started: " + fmt(a.startedAt) + ")").join(", ");
-      whoLine += "\n👤 In progress: " + names;
-    }
-  }
-  if(t.status==="completed"){
-    if(t.type==="assigned" && (t.completedBy||[]).length>0){
-      const names = t.completedBy.map(c=>c.name + " (" + fmt(c.completedAt) + ")").join(", ");
-      whoLine += "\n✅ Completed by: " + names;
-    } else if(t.type==="pool" && (t.claims||[]).filter(c=>c.completedAt).length>0){
-      const names = t.claims.filter(c=>c.completedAt).map(c=>c.name + " (" + fmt(c.completedAt) + ")").join(", ");
-      whoLine += "\n✅ Completed by: " + names;
-    }
-  }
-
-  // Build message
-  let msg = priEmoji + " *Atubre Task Flow*\n";
-  msg += typeEmoji + " *" + t.title + "*\n";
-  msg += statusLabel;
-  if(t.tag) msg += " · " + t.tag;
-  if(t.due) msg += "\n📅 Due: " + t.due;
-  msg += whoLine;
-  if(t.desc) msg += "\n\n" + t.desc.substr(0,200) + (t.desc.length>200?"...":"");
-  if((t.uploads||[]).length>0) msg += "\n📎 " + t.uploads.length + " file(s) uploaded";
-  msg += "\n\n👉 Open task: " + shareUrl;
+  const msg = `${priEmoji} *Atubre Task Flow*\n\n*${t.title}*\n${t.type==="pool"?"🌊 Open Pool — anyone can claim this":""}${t.desc?`\n\n${t.desc.substr(0,200)}${t.desc.length>200?"...":""}`:""}${t.due?`\n\n📅 Due: ${t.due}`:""}\n\n👉 Open task: ${shareUrl}`;
 
   // Try native share (mobile) first
   if(navigator.share){
     try {
-      await navigator.share({ title: "Atubre Task: " + t.title, text: msg, url: shareUrl });
+      await navigator.share({ title: `Atubre Task: ${t.title}`, text: msg, url: shareUrl });
       return;
     } catch(e){ if(e.name==="AbortError") return; }
   }
 
   // Fallback — show share modal
   $("share-url-input").value=shareUrl;
-  $("share-whatsapp-btn").href="https://wa.me/?text="+encodeURIComponent(msg);
+  $("share-whatsapp-btn").href=`https://wa.me/?text=${encodeURIComponent(msg)}`;
   $("share-task-name").textContent=t.title;
   $("share-modal").classList.add("open");
+};
 
 window.copyShareLink = () => {
   const input=$("share-url-input");
@@ -2765,34 +2645,11 @@ select option{background:#0d0f16;}
 <!-- STAT MODAL — clickable dashboard cards -->
 <div class="modal-overlay" id="stat-modal">
   <div class="modal" style="width:580px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
       <h3 id="stat-modal-title" style="margin:0;"></h3>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('stat-modal')">✕ Close</button>
     </div>
     <div id="stat-modal-body" style="max-height:60vh;overflow-y:auto;"></div>
-  </div>
-</div>
-
-<!-- STAT SHARE MODAL -->
-<div class="modal-overlay" id="stat-share-modal">
-  <div class="modal" style="width:460px;">
-    <h3 style="margin-bottom:16px;">🔗 SHARE REPORT</h3>
-    <div style="margin-bottom:14px;">
-      <label>Message Preview</label>
-      <textarea id="stat-share-text" rows="8" readonly style="font-size:.78rem;line-height:1.6;background:var(--card);color:var(--soft);resize:none;"></textarea>
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:14px;">
-      <a id="stat-whatsapp-btn" href="" target="_blank"
-         class="btn btn-green btn-sm" style="text-decoration:none;min-width:160px;">
-        💬 Share on WhatsApp
-      </a>
-      <button class="btn btn-ghost btn-sm" style="min-width:120px;" onclick="copyStatText()">
-        📋 Copy Text
-      </button>
-    </div>
-    <div style="text-align:center;">
-      <button class="btn btn-ghost btn-sm" onclick="closeModal('stat-share-modal')">Close</button>
-    </div>
   </div>
 </div>
 
