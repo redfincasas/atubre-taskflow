@@ -614,21 +614,22 @@ function renderInProgress(T){
 function renderPool(T){
   const uid=cu.id;
   const isA=cu.role==="admin";
+  // T is already priority-filtered by applyPriorityFilter before being passed in
   const pool=T.filter(t=>{
     if(t.type!=="pool") return false;
     if(t.status==="completed") return false;
     const claims=t.claims||[];
-    // If user is admin — show all pool tasks including claimed ones
     if(isA) return !claims.find(c=>c.uid===uid&&!c.completedAt);
-    // If member — only show tasks with NO active claims by ANYONE
-    // (except their own in-progress tasks)
     const myEntry=claims.find(c=>c.uid===uid&&!c.completedAt);
-    if(myEntry) return false; // already in my in-progress, not in pool
+    if(myEntry) return false;
     const anyActiveClaim=claims.find(c=>!c.completedAt);
-    if(anyActiveClaim) return false; // someone else has it — hide completely
+    if(anyActiveClaim) return false;
     return true;
   });
-  $("pool-list").innerHTML=pool.length?pool.map(t=>poolCard(t)).join(""):empty("🌊","No available pool tasks — check In Progress for your active tasks");
+  const emptyMsg = priorityFilter!=="all"
+    ? `No ${priorityFilter} priority tasks available in the pool`
+    : "No available pool tasks — check In Progress for your active tasks";
+  $("pool-list").innerHTML=pool.length?pool.map(t=>poolCard(t)).join(""):empty("🌊", emptyMsg);
 }
 
 function poolCard(t){
