@@ -453,19 +453,12 @@ function renderDashboard(T){
       if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===uid&&c.completedAt);
       return false;
     }).length;
-  // Recent tasks for members:
-  // 1. Unclaimed pool tasks (zero active claims by anyone)
-  // 2. Their own in-progress pool tasks
-  // 3. Tasks assigned to them
-  const availablePool=poolTasks.filter(t=>
-    t.status==="pending"&&
-    !(t.claims||[]).find(c=>!c.completedAt) // no active claims by anyone
-  );
+  // Recent Tasks for members = ONLY tasks they personally have touched
+  // Empty until they claim a pool task or are assigned one
   const myInProgressPool=poolTasks.filter(t=>(t.claims||[]).find(c=>c.uid===uid&&!c.completedAt));
   const myCompletedPool=poolTasks.filter(t=>(t.claims||[]).find(c=>c.uid===uid&&c.completedAt));
   const recentTasks=isA?T.slice(0,5):[
     ...myAssigned,
-    ...availablePool,
     ...myInProgressPool,
     ...myCompletedPool
   ].sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)).slice(0,5);
