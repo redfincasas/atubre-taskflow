@@ -489,7 +489,9 @@ function renderDashboard(T){
   // Render intel section for admins
   if(cu.role==="admin") renderIntelList();
   const myOpen=T.filter(t=>(t.assignees||[]).includes(cu.id)&&t.status!=="completed").length;
-  const poolOpen=T.filter(t=>t.type==="pool"&&t.status!=="completed"&&!(t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt)).length;
+  const poolOpen=cu.role==="admin"
+    ? T.filter(t=>t.type==="pool"&&t.status!=="completed"&&!(t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt)).length
+    : T.filter(t=>t.type==="pool"&&t.status!=="completed"&&!(t.claims||[]).find(c=>!c.completedAt)).length;
   const myInProgress=T.filter(t=>{
     if(t.type==="assigned") return (t.acceptedBy||[]).find(a=>a.uid===cu.id)&&!(t.completedBy||[]).find(c=>c.uid===cu.id);
     if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt);
@@ -620,10 +622,13 @@ function renderPool(T){
     if(t.status==="completed") return false;
     const claims=t.claims||[];
     if(isA) return !claims.find(c=>c.uid===uid&&!c.completedAt);
+    // Member's own in-progress task goes to In Progress, not pool
     const myEntry=claims.find(c=>c.uid===uid&&!c.completedAt);
     if(myEntry) return false;
+    // Hide tasks actively being worked on by someone else
     const anyActiveClaim=claims.find(c=>!c.completedAt);
     if(anyActiveClaim) return false;
+    // Show tasks with no active claims (pending or all claims completed)
     return true;
   });
   const emptyMsg = priorityFilter!=="all"
