@@ -453,13 +453,21 @@ function renderDashboard(T){
       if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===uid&&c.completedAt);
       return false;
     }).length;
-  // Recent tasks for members: only truly unclaimed pool tasks (no claims at all) + their own assigned tasks
-  const availablePool=poolTasks.filter(t=>t.status==="pending"&&(t.claims||[]).length===0);
+  // Recent tasks for members:
+  // 1. Unclaimed pool tasks (zero active claims by anyone)
+  // 2. Their own in-progress pool tasks
+  // 3. Tasks assigned to them
+  const availablePool=poolTasks.filter(t=>
+    t.status==="pending"&&
+    !(t.claims||[]).find(c=>!c.completedAt) // no active claims by anyone
+  );
   const myInProgressPool=poolTasks.filter(t=>(t.claims||[]).find(c=>c.uid===uid&&!c.completedAt));
+  const myCompletedPool=poolTasks.filter(t=>(t.claims||[]).find(c=>c.uid===uid&&c.completedAt));
   const recentTasks=isA?T.slice(0,5):[
     ...myAssigned,
     ...availablePool,
-    ...myInProgressPool
+    ...myInProgressPool,
+    ...myCompletedPool
   ].sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)).slice(0,5);
   const vis=isA?T:[...myAssigned,...poolTasks];
   const tapHint=`<div style="font-size:.6rem;margin-top:4px;font-family:Orbitron,sans-serif;letter-spacing:.05em;opacity:.7;">TAP TO VIEW ›</div>`;
@@ -612,11 +620,21 @@ function renderInProgress(T){
 // ── POOL ──────────────────────────────────────────
 function renderPool(T){
   const uid=cu.id;
-  const pool=T.filter(t=>
-    t.type==="pool" &&
-    t.status!=="completed" &&                          // exclude fully completed tasks
-    !(t.claims||[]).find(c=>c.uid===uid&&!c.completedAt) // exclude tasks this user is working on
-  );
+  const isA=cu.role==="admin";
+  const pool=T.filter(t=>{
+    if(t.type!=="pool") return false;
+    if(t.status==="completed") return false;
+    const claims=t.claims||[];
+    // If user is admin — show all pool tasks including claimed ones
+    if(isA) return !claims.find(c=>c.uid===uid&&!c.completedAt);
+    // If member — only show tasks with NO active claims by ANYONE
+    // (except their own in-progress tasks)
+    const myEntry=claims.find(c=>c.uid===uid&&!c.completedAt);
+    if(myEntry) return false; // already in my in-progress, not in pool
+    const anyActiveClaim=claims.find(c=>!c.completedAt);
+    if(anyActiveClaim) return false; // someone else has it — hide completely
+    return true;
+  });
   $("pool-list").innerHTML=pool.length?pool.map(t=>poolCard(t)).join(""):empty("🌊","No available pool tasks — check In Progress for your active tasks");
 }
 
