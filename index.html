@@ -435,15 +435,12 @@ function renderDashboard(T){
   // Members only see their own stats
   const myAssigned=T.filter(t=>t.type==="assigned"&&(t.assignees||[]).includes(uid));
   const poolTasks=T.filter(t=>t.type==="pool");
-  const totalCount=isA?T.length:myAssigned.length+poolTasks.length;
-  // Pending for members: unclaimed pool tasks + their unstarted assigned tasks
+  // Total for members: truly available pool tasks + assigned to them
+  const totalCount=isA?T.length:myAssigned.length+poolTasks.filter(t=>(t.claims||[]).length===0||t.status==="pending").length;
+  // Pending for members: only truly unclaimed pool tasks (zero claims) + their unstarted assigned tasks
   const pendingCount=isA?T.filter(t=>t.status==="pending").length:
     myAssigned.filter(t=>t.status==="pending").length+
-    poolTasks.filter(t=>
-      t.status==="pending"&&
-      !(t.claims||[]).find(c=>c.uid===uid)&&
-      !(t.claims||[]).find(c=>!c.completedAt)  // exclude tasks ANY member has claimed
-    ).length;
+    poolTasks.filter(t=>t.status==="pending"&&(t.claims||[]).length===0).length;
   const inProgressCount=isA?T.filter(t=>t.status==="accepted").length:
     T.filter(t=>{
       if(t.type==="assigned") return (t.acceptedBy||[]).find(a=>a.uid===uid)&&!(t.completedBy||[]).find(c=>c.uid===uid);
@@ -456,10 +453,13 @@ function renderDashboard(T){
       if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===uid&&c.completedAt);
       return false;
     }).length;
-  // Recent tasks for members: only pending unclaimed pool tasks + their assigned tasks
+  // Recent tasks for members: only truly unclaimed pool tasks (no claims at all) + their own assigned tasks
+  const availablePool=poolTasks.filter(t=>t.status==="pending"&&(t.claims||[]).length===0);
+  const myInProgressPool=poolTasks.filter(t=>(t.claims||[]).find(c=>c.uid===uid&&!c.completedAt));
   const recentTasks=isA?T.slice(0,5):[
     ...myAssigned,
-    ...poolTasks.filter(t=>t.status==="pending"&&!(t.claims||[]).find(c=>c.uid===uid))
+    ...availablePool,
+    ...myInProgressPool
   ].sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)).slice(0,5);
   const vis=isA?T:[...myAssigned,...poolTasks];
   const tapHint=`<div style="font-size:.6rem;margin-top:4px;font-family:Orbitron,sans-serif;letter-spacing:.05em;opacity:.7;">TAP TO VIEW ›</div>`;
@@ -1117,7 +1117,7 @@ window.openStatModal = (filter) => {
     title="⏳ Pending Tasks"; color="var(--gold)";
     filtered=isAdmin?T.filter(t=>t.status==="pending"):
       [...myAss.filter(t=>t.status==="pending"),
-       ...pool.filter(t=>t.status==="pending"&&!(t.claims||[]).find(c=>c.uid===uid))];
+       ...pool.filter(t=>t.status==="pending"&&(t.claims||[]).length===0)];
   } else if(filter==="inprogress"){
     title="⚡ In Progress"; color="#4488ff";
     filtered=isAdmin?T.filter(t=>t.status==="accepted"):
@@ -1136,7 +1136,12 @@ window.openStatModal = (filter) => {
       });
   } else {
     title="All Tasks"; color="var(--cyan)";
-    filtered=isAdmin?T:[...myAss,...pool];
+    // Members see: their assigned tasks + unclaimed pool + their own in-progress pool
+    filtered=isAdmin?T:[
+      ...myAss,
+      ...pool.filter(t=>(t.claims||[]).length===0||
+        (t.claims||[]).find(c=>c.uid===uid))
+    ];
   }
 
   if(!filtered.length){
