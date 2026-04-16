@@ -435,12 +435,12 @@ function renderDashboard(T){
   // Members only see their own stats
   const myAssigned=T.filter(t=>t.type==="assigned"&&(t.assignees||[]).includes(uid));
   const poolTasks=T.filter(t=>t.type==="pool");
-  // Total for members: truly available pool tasks + assigned to them
-  const totalCount=isA?T.length:myAssigned.length+poolTasks.filter(t=>(t.claims||[]).length===0||t.status==="pending").length;
-  // Pending for members: only truly unclaimed pool tasks (zero claims) + their unstarted assigned tasks
+  // Total for members: available unclaimed pool tasks + assigned to them
+  const totalCount=isA?T.length:myAssigned.length+poolTasks.filter(t=>(t.claims||[]).length===0).length;
+  // Pending for members = ONLY tasks assigned to THEM that they haven't started yet
+  // Pool tasks are NOT pending for someone who hasn't claimed them
   const pendingCount=isA?T.filter(t=>t.status==="pending").length:
-    myAssigned.filter(t=>t.status==="pending").length+
-    poolTasks.filter(t=>t.status==="pending"&&(t.claims||[]).length===0).length;
+    myAssigned.filter(t=>t.status==="pending").length;
   const inProgressCount=isA?T.filter(t=>t.status==="accepted").length:
     T.filter(t=>{
       if(t.type==="assigned") return (t.acceptedBy||[]).find(a=>a.uid===uid)&&!(t.completedBy||[]).find(c=>c.uid===uid);
@@ -650,8 +650,8 @@ function poolCard(t){
   return `<div class="task-accept-card">
     <div class="task-card-top">
       <div style="flex:1;">
-        <div class="task-title">${t.title}</div>
-        ${t.desc?`<div class="task-desc">${t.desc}</div>`:""}
+        <div class="task-title">${t.title}${t.isFollowUp?' <span style="font-size:.65rem;background:rgba(179,136,255,.15);color:var(--purple);padding:1px 8px;border-radius:20px;font-family:Orbitron,sans-serif;vertical-align:middle;">🔁 FOLLOW-UP</span>':''}</div>
+        ${t.isFollowUp?followUpBanner:(t.desc?`<div class="task-desc">${t.desc}</div>`:"")}
         <div class="task-meta" style="margin-top:8px;">
           <span class="tag tag-gold">🌊 Open Pool</span>
           ${t.tag?`<span class="tag tag-soft">${t.tag}</span>`:""}
@@ -1115,9 +1115,10 @@ window.openStatModal = (filter) => {
 
   if(filter==="pending"){
     title="⏳ Pending Tasks"; color="var(--gold)";
+    // Pending for members = ONLY their assigned tasks not yet started
+    // Pool tasks are not "pending" for them until they claim one
     filtered=isAdmin?T.filter(t=>t.status==="pending"):
-      [...myAss.filter(t=>t.status==="pending"),
-       ...pool.filter(t=>t.status==="pending"&&(t.claims||[]).length===0)];
+      myAss.filter(t=>t.status==="pending");
   } else if(filter==="inprogress"){
     title="⚡ In Progress"; color="#4488ff";
     filtered=isAdmin?T.filter(t=>t.status==="accepted"):
