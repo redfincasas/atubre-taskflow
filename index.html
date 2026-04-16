@@ -435,8 +435,10 @@ function renderDashboard(T){
   // Members only see their own stats
   const myAssigned=T.filter(t=>t.type==="assigned"&&(t.assignees||[]).includes(uid));
   const poolTasks=T.filter(t=>t.type==="pool");
-  // Total for members: available unclaimed pool tasks + assigned to them
-  const totalCount=isA?T.length:myAssigned.length+poolTasks.filter(t=>(t.claims||[]).length===0).length;
+  // Total for members: tasks they personally own (claimed/assigned) + available unclaimed pool
+  const myClaimed=poolTasks.filter(t=>(t.claims||[]).find(c=>c.uid===uid));
+  const availableUnclaimed=poolTasks.filter(t=>!(t.claims||[]).find(c=>!c.completedAt)&&t.status!=="completed");
+  const totalCount=isA?T.length:myAssigned.length+myClaimed.length+availableUnclaimed.length;
   // Pending for members = ONLY tasks assigned to THEM that they haven't started yet
   // Pool tasks are NOT pending for someone who hasn't claimed them
   const pendingCount=isA?T.filter(t=>t.status==="pending").length:
@@ -492,6 +494,7 @@ function renderDashboard(T){
   const poolOpen=cu.role==="admin"
     ? T.filter(t=>t.type==="pool"&&t.status!=="completed"&&!(t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt)).length
     : T.filter(t=>t.type==="pool"&&t.status!=="completed"&&!(t.claims||[]).find(c=>!c.completedAt)).length;
+  // For members: sidebar badge shows available unclaimed tasks only
   const myInProgress=T.filter(t=>{
     if(t.type==="assigned") return (t.acceptedBy||[]).find(a=>a.uid===cu.id)&&!(t.completedBy||[]).find(c=>c.uid===cu.id);
     if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt);
@@ -616,24 +619,24 @@ function renderInProgress(T){
 function renderPool(T){
   const uid=cu.id;
   const isA=cu.role==="admin";
-  // T is already priority-filtered by applyPriorityFilter before being passed in
   const pool=T.filter(t=>{
     if(t.type!=="pool") return false;
     if(t.status==="completed") return false;
     const claims=t.claims||[];
-    if(isA) return !claims.find(c=>c.uid===uid&&!c.completedAt);
-    // Member's own in-progress task goes to In Progress, not pool
-    const myEntry=claims.find(c=>c.uid===uid&&!c.completedAt);
-    if(myEntry) return false;
-    // Hide tasks actively being worked on by someone else
-    const anyActiveClaim=claims.find(c=>!c.completedAt);
-    if(anyActiveClaim) return false;
-    // Show tasks with no active claims (pending or all claims completed)
-    return true;
+    if(isA){
+      // Admin sees ALL pool tasks (pending or accepted) — except ones they personally are working on
+      return !claims.find(c=>c.uid===uid&&!c.completedAt);
+    } else {
+      // Member sees ONLY unclaimed tasks (no active claims by anyone)
+      // Their own in-progress tasks go to In Progress page not pool
+      if(claims.find(c=>c.uid===uid&&!c.completedAt)) return false;
+      if(claims.find(c=>!c.completedAt)) return false;
+      return true;
+    }
   });
   const emptyMsg = priorityFilter!=="all"
-    ? `No ${priorityFilter} priority tasks available in the pool`
-    : "No available pool tasks — check In Progress for your active tasks";
+    ? `No ${priorityFilter} priority tasks in the pool`
+    : isA ? "No pool tasks yet — add one with + Add Pool Task" : "No available tasks right now — check back later";
   $("pool-list").innerHTML=pool.length?pool.map(t=>poolCard(t)).join(""):empty("🌊", emptyMsg);
 }
 
