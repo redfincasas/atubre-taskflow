@@ -239,37 +239,59 @@ window.handleRegister = async () => {
   if (pass.length<6) return authErr("Password must be at least 6 characters.");
   if (role==="admin"&&code!==ADMIN_CODE) return authErr("Invalid admin invite code.");
   $("register-btn").textContent="Creating...";
+  let cred = null;
   try {
-    const cred=await createUserWithEmailAndPassword(auth,email,pass);
+    cred = await createUserWithEmailAndPassword(auth,email,pass);
     await updateProfile(cred.user,{displayName:name});
-    // Admins are auto-approved, members need admin approval
     const approved = role==="admin";
-    await setDoc(doc(db,"users",cred.user.uid),{
-      name, email, role, approved,
-      createdAt: serverTimestamp()
-    });
-    if (!approved) {
-      // Notify all admins of pending registration
-      const adminSnap = await getDocs(query(collection(db,"users"),where("role","==","admin")));
-      for (const d of adminSnap.docs) {
-        await addDoc(collection(db,"notifications"),{
-          recipientId: d.id,
-          msg: `New registration pending approval: ${name} (${email}) — Team Member`,
-          type: "approval",
-          userId: cred.user.uid,
-          read: false,
+
+    // Write user doc with retry — this was failing silently before
+    let writeSuccess = false;
+    for(let attempt=1; attempt<=3; attempt++){
+      try {
+        await setDoc(doc(db,"users",cred.user.uid),{
+          name, email, role, approved,
           createdAt: serverTimestamp()
         });
+        writeSuccess = true;
+        break;
+      } catch(writeErr){
+        if(attempt===3) throw writeErr;
+        await new Promise(r=>setTimeout(r,1000*attempt));
       }
-      // Sign them out immediately — cannot access until approved
+    }
+
+    if (!approved) {
+      // Notify all admins with retry
+      try {
+        const adminSnap = await getDocs(query(collection(db,"users"),where("role","==","admin")));
+        for (const d of adminSnap.docs) {
+          await addDoc(collection(db,"notifications"),{
+            recipientId: d.id,
+            msg: `🆕 New member registration: ${name} (${email}) — awaiting your approval`,
+            type: "approval",
+            userId: cred.user.uid,
+            read: false,
+            createdAt: serverTimestamp()
+          });
+        }
+      } catch(notifErr){
+        console.warn("Notification failed but registration succeeded:", notifErr);
+      }
+      // Sign them out — cannot access until approved
       await signOut(auth);
-      // Show pending screen
       $("auth-screen").style.display="none";
       $("pending-screen").style.display="flex";
       return;
     }
+    // Admin registered — proceed normally
+    $("register-btn").textContent="Create Account";
   } catch(e){
-    authErr(e.message.includes("email-already-in-use")?"Email already registered.":e.message);
+    // If auth account was created but Firestore failed, delete the auth account
+    if(cred && e.code !== "auth/email-already-in-use"){
+      try { await cred.user.delete(); } catch(_){}
+    }
+    authErr(e.message.includes("email-already-in-use")?"Email already registered — try logging in instead.":e.message);
     $("register-btn").textContent="Create Account";
   }
 };
@@ -1081,29 +1103,51 @@ window.openStatModal = (filter) => {
   const isAdmin = cu.role === "admin";
   const uid = cu.id;
 
-  // Get tasks visible to current user
-  let vis = isAdmin ? T : T.filter(t=>
-    (t.assignees||[]).includes(uid)||t.type==="pool"||
-    (t.type==="private"&&(t.ownerId===uid||(t.sharedWith||[]).includes(uid)))
-  );
-
-  // Apply filter
-  let filtered = vis;
+  // Get tasks visible to current user — members only see their own activity
+  let filtered = [];
   let title = "All Tasks";
   let color = "var(--cyan)";
-  if(filter==="pending"){
-    filtered = vis.filter(t=>t.status==="pending");
-    title = "⏳ Pending Tasks";
-    color = "var(--gold)";
-  } else if(filter==="inprogress"){
-    filtered = vis.filter(t=>t.status==="accepted");
-    title = "⚡ In Progress";
-    color = "#4488ff";
-  } else if(filter==="completed"){
-    filtered = vis.filter(t=>t.status==="completed");
-    title = "✅ Completed Tasks";
-    color = "var(--green)";
+
+  if(isAdmin){
+    const vis = T;
+    if(filter==="pending")       filtered = vis.filter(t=>t.status==="pending");
+    else if(filter==="inprogress") filtered = vis.filter(t=>t.status==="accepted");
+    else if(filter==="completed")  filtered = vis.filter(t=>t.status==="completed");
+    else filtered = vis;
+  } else {
+    // Members only see pool tasks + their assigned tasks
+    const myAssigned = T.filter(t=>t.type==="assigned"&&(t.assignees||[]).includes(uid));
+    const poolTasks  = T.filter(t=>t.type==="pool");
+    const allVisible = [...myAssigned,...poolTasks];
+
+    if(filter==="pending"){
+      // Pending pool (not claimed by anyone) + pending assigned to them
+      filtered = [
+        ...myAssigned.filter(t=>t.status==="pending"),
+        ...poolTasks.filter(t=>t.status==="pending"&&!(t.claims||[]).find(c=>c.uid===uid))
+      ];
+    } else if(filter==="inprogress"){
+      // Only tasks THEY are personally working on
+      filtered = T.filter(t=>{
+        if(t.type==="assigned") return (t.acceptedBy||[]).find(a=>a.uid===uid)&&!(t.completedBy||[]).find(c=>c.uid===uid);
+        if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===uid&&!c.completedAt);
+        return false;
+      });
+    } else if(filter==="completed"){
+      // Only tasks THEY personally completed
+      filtered = T.filter(t=>{
+        if(t.type==="assigned") return (t.completedBy||[]).find(c=>c.uid===uid);
+        if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===uid&&c.completedAt);
+        return false;
+      });
+    } else {
+      filtered = allVisible;
+    }
   }
+
+  if(filter==="pending")       { title = "⏳ Pending Tasks";   color = "var(--gold)"; }
+  else if(filter==="inprogress"){ title = "⚡ In Progress";     color = "#4488ff"; }
+  else if(filter==="completed") { title = "✅ Completed Tasks"; color = "var(--green)"; }
 
   if(!filtered.length){
     $("stat-modal-body").innerHTML = empty("🎉","No tasks in this category yet");
