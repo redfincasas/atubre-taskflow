@@ -484,7 +484,7 @@ function renderDashboard(T){
       <div class="stat-label">Completed</div>
       ${tapHint}
     </div>`;
-  $("dash-recent").innerHTML=vis.slice(0,5).map(t=>miniCard(t)).join("")||empty("📭","No tasks yet");
+  $("dash-recent").innerHTML=recentTasks.map(t=>miniCard(t)).join("")||empty("📭","No tasks yet");
   // Render intel section for admins
   if(cu.role==="admin") renderIntelList();
   const myOpen=T.filter(t=>(t.assignees||[]).includes(cu.id)&&t.status!=="completed").length;
