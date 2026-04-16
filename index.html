@@ -436,9 +436,14 @@ function renderDashboard(T){
   const myAssigned=T.filter(t=>t.type==="assigned"&&(t.assignees||[]).includes(uid));
   const poolTasks=T.filter(t=>t.type==="pool");
   const totalCount=isA?T.length:myAssigned.length+poolTasks.length;
+  // Pending for members: unclaimed pool tasks + their unstarted assigned tasks
   const pendingCount=isA?T.filter(t=>t.status==="pending").length:
     myAssigned.filter(t=>t.status==="pending").length+
-    poolTasks.filter(t=>t.status==="pending"&&!(t.claims||[]).find(c=>c.uid===uid)).length;
+    poolTasks.filter(t=>
+      t.status==="pending"&&
+      !(t.claims||[]).find(c=>c.uid===uid)&&
+      !(t.claims||[]).find(c=>!c.completedAt)  // exclude tasks ANY member has claimed
+    ).length;
   const inProgressCount=isA?T.filter(t=>t.status==="accepted").length:
     T.filter(t=>{
       if(t.type==="assigned") return (t.acceptedBy||[]).find(a=>a.uid===uid)&&!(t.completedBy||[]).find(c=>c.uid===uid);
@@ -451,7 +456,11 @@ function renderDashboard(T){
       if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===uid&&c.completedAt);
       return false;
     }).length;
-  const recentTasks=isA?T.slice(0,5):[...myAssigned,...poolTasks.filter(t=>t.status==="pending")].sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)).slice(0,5);
+  // Recent tasks for members: only pending unclaimed pool tasks + their assigned tasks
+  const recentTasks=isA?T.slice(0,5):[
+    ...myAssigned,
+    ...poolTasks.filter(t=>t.status==="pending"&&!(t.claims||[]).find(c=>c.uid===uid))
+  ].sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)).slice(0,5);
   const vis=isA?T:[...myAssigned,...poolTasks];
   const tapHint=`<div style="font-size:.6rem;margin-top:4px;font-family:Orbitron,sans-serif;letter-spacing:.05em;opacity:.7;">TAP TO VIEW ›</div>`;
   $("stats-row").innerHTML=`
