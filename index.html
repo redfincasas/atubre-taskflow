@@ -1992,6 +1992,9 @@ window.openTaskDetailModal = (taskId) => {
         </div>
       </div>`:""}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,229,255,.08);">
+      ${(t.type==="pool"&&t.status==="pending"&&!(t.claims||[]).find(c=>!c.completedAt))?`<button class="btn btn-green btn-sm" onclick="claimPool('${t.id}');closeModal('detail-modal');">⚡ Claim & Start</button>`:""}
+      ${(t.type==="pool"&&(t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt))?`<button class="btn btn-green btn-sm" onclick="completePool('${t.id}');closeModal('detail-modal');">✅ Mark Complete</button>`:""}
+      ${(t.type==="assigned"&&(t.acceptedBy||[]).find(a=>a.uid===cu.id)&&!(t.completedBy||[]).find(c=>c.uid===cu.id))?`<button class="btn btn-green btn-sm" onclick="completeTask('${t.id}');closeModal('detail-modal');">✅ Mark Complete</button>`:""}
       <button class="btn btn-ghost btn-sm" onclick="openSubtaskModal('${t.id}');closeModal('detail-modal');">📋 Steps</button>
       <button class="btn btn-ghost btn-sm" onclick="openCommentsModal('${t.id}');closeModal('detail-modal');">💬 Notes</button>
       <button class="btn btn-ghost btn-sm" onclick="shareTask('${t.id}')">🔗 Share</button>
