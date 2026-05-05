@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <!-- © 2026 Atubre Co. Limited · All Rights Reserved · Atubre Task Flow -->
 <html lang="en">
@@ -1157,11 +1158,10 @@ window.openStatModal = (filter) => {
       });
   } else {
     title="All Tasks"; color="var(--cyan)";
-    // Members see: their assigned tasks + unclaimed pool + their own in-progress pool
+    // Members only see tasks they personally own or have claimed
     filtered=isAdmin?T:[
       ...myAss,
-      ...pool.filter(t=>(t.claims||[]).length===0||
-        (t.claims||[]).find(c=>c.uid===uid))
+      ...pool.filter(t=>(t.claims||[]).find(c=>c.uid===uid))
     ];
   }
 
@@ -1200,9 +1200,9 @@ window.openStatModal = (filter) => {
         timestamps = `<div class="time-stamp done" style="margin-top:4px;">✅ ${fmt(t.completedAt)}</div>`;
     }
 
-    return `<div class="report-card" style="cursor:pointer;" onclick="closeModal('stat-modal');openTaskDetailModal('${t.id}')">
+    return `<div class="report-card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
-        <div style="flex:1;">
+        <div style="flex:1;cursor:pointer;" onclick="closeModal('stat-modal');openTaskDetailModal('${t.id}')">
           <div class="report-title">${t.title}</div>
           <div class="task-meta" style="margin-top:5px;">
             <span class="tag ${typeCls(t)}">${typeLabel(t)}</span>
@@ -1212,10 +1212,17 @@ window.openStatModal = (filter) => {
             ${uploads.length>0?`<span class="task-date">📎 ${uploads.length}</span>`:""}
             ${comments.length>0?`<span class="task-date">💬 ${comments.length}</span>`:""}
           </div>
+          ${whoHTML}
           ${progressBar}
           ${timestamps}
         </div>
-        <div style="color:var(--muted);font-size:.8rem;flex-shrink:0;">›</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+          ${(t.type==="pool"&&t.status==="pending"&&!(t.claims||[]).find(c=>!c.completedAt)&&cu.role!=="admin")?`<button class="btn btn-green btn-sm" style="font-size:.72rem;" onclick="event.stopPropagation();claimPool('${t.id}');closeModal('stat-modal');">⚡ Claim & Start</button>`:""}
+          <div style="display:flex;gap:4px;align-items:center;">
+            <button class="btn btn-ghost btn-sm" style="padding:4px 8px;font-size:.7rem;color:var(--green);border-color:rgba(0,255,179,.2);" onclick="event.stopPropagation();shareTask('${t.id}')">🔗</button>
+            <div style="color:var(--muted);font-size:.8rem;cursor:pointer;" onclick="closeModal('stat-modal');openTaskDetailModal('${t.id}')">›</div>
+          </div>
+        </div>
       </div>
     </div>`;
   }).join("");
