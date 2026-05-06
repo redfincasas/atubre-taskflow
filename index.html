@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <!-- © 2026 Atubre Co. Limited · All Rights Reserved · Atubre Task Flow -->
 <html lang="en">
@@ -7,6 +8,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Atubre Task Flow</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile }
@@ -14,48 +16,6 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, si
 import { getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
   onSnapshot, query, where, orderBy, serverTimestamp, Timestamp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-// ── DIAGNOSTIC LOGGING ────────────────────────────
-window._diagnostics = {
-  logs: [],
-  errors: [],
-  firebaseConnected: false,
-  timestamp: new Date().toISOString()
-};
-
-const logDiag = (msg, type="log") => {
-  const ts = new Date().toLocaleTimeString();
-  const entry = `[${ts}] ${msg}`;
-  if(type==="error") {
-    window._diagnostics.errors.push(entry);
-    console.error(entry);
-  } else {
-    window._diagnostics.logs.push(entry);
-    console.log(entry);
-  }
-};
-
-window.showDiagnostics = () => {
-  const diag = window._diagnostics;
-  const html = `
-    <div style="position:fixed;bottom:40px;right:20px;background:#0d0f16;border:1px solid #00e5ff;border-radius:12px;padding:16px;max-width:400px;max-height:500px;overflow-y:auto;font-family:monospace;font-size:.75rem;z-index:9999;color:#d8f0f4;">
-      <div style="margin-bottom:10px;font-weight:bold;color:#00e5ff;">🔧 FIREBASE DIAGNOSTICS</div>
-      <div style="margin-bottom:8px;padding:8px;background:#1a1a2e;border-radius:6px;">
-        <div style="color:#ffc107;">Firebase Connected: <strong>${diag.firebaseConnected ? '✅ YES' : '❌ NO'}</strong></div>
-        <div style="color:#6a9aa4;font-size:.7rem;">Last Check: ${diag.timestamp}</div>
-      </div>
-      <div style="margin-bottom:8px;">
-        <div style="color:#00ffb3;margin-bottom:4px;">✅ Logs (${diag.logs.length}):</div>
-        ${diag.logs.slice(-5).map(l => `<div style="margin:2px 0;color:#6a9aa4;">${l}</div>`).join("")}
-      </div>
-      <div>
-        <div style="color:#ff4b6e;margin-bottom:4px;">❌ Errors (${diag.errors.length}):</div>
-        ${diag.errors.slice(-3).map(e => `<div style="margin:2px 0;color:#ff6b7a;">${e}</div>`).join("")}
-      </div>
-      <button onclick="window._diagnostics.logs=[];window._diagnostics.errors=[];this.parentElement.remove();" style="margin-top:8px;background:#00e5ff;color:#000;border:none;padding:4px 8px;border-radius:4px;font-size:.7rem;cursor:pointer;">Clear</button>
-    </div>`;
-  document.body.insertAdjacentHTML('beforeend', html);
-};
 
 // ── CONFIG ────────────────────────────────────────
 const firebaseConfig = {
@@ -66,22 +26,13 @@ const firebaseConfig = {
   messagingSenderId: "737864727776",
   appId: "1:737864727776:web:7c491dc461c209434de485"
 };
-
-logDiag("Initializing Firebase with config for project: " + firebaseConfig.projectId);
-
-let app, auth, db;
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-  logDiag("✅ Firebase SDK initialized successfully");
-} catch(e) {
-  logDiag("❌ Firebase init error: " + e.message, "error");
-}
-
 const CLOUDINARY_CLOUD = "dfstfggg7";
 const CLOUDINARY_PRESET = "Atube and Claude";
 const ADMIN_CODE = "ATUBRE2026";
+
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
 
 // ── STATE ─────────────────────────────────────────
 let cu = null;
@@ -105,17 +56,13 @@ const toast = (msg, type="info") => {
 };
 const empty = (icon,msg) => `<div class="empty-state"><div class="empty-icon">${icon}</div><div>${msg}</div></div>`;
 
-// ── FOLLOW-UP BANNER (FIX) ────────────────────────
-const followUpBanner = `<div style="background:rgba(179,136,255,.08);border-left:3px solid var(--purple);border-radius:6px;padding:8px 12px;margin:8px 0;font-size:.75rem;color:var(--soft);">
-  🔁 <strong style="color:var(--purple);">Follow-up Task:</strong> This task is a follow-up from a previous assignment
-</div>`;
-
 // ── CLOUDINARY UPLOAD ─────────────────────────────
 async function uploadToCloudinary(file, onProgress) {
   const fd = new FormData();
   fd.append("file", file);
   fd.append("upload_preset", CLOUDINARY_PRESET);
   fd.append("folder", "atubre-taskflow");
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const resourceType = file.type.startsWith("video") ? "video" : "auto";
@@ -191,7 +138,6 @@ window.openLightbox = url => {
   $("lightbox-img").src = url;
   $("lightbox").classList.add("open");
 };
-
 window.closeLightbox = () => $("lightbox").classList.remove("open");
 
 // ── UPLOAD MODAL ──────────────────────────────────
@@ -206,25 +152,30 @@ window.openUploadModal = taskId => {
 window.handleUpload = async () => {
   const files = $("upload-input").files;
   if (!files.length) return toast("Please select a file first.", "error");
-  const maxSize = 100 * 1024 * 1024;
+  const maxSize = 100 * 1024 * 1024; // 100MB
   for (const f of files) {
     if (f.size > maxSize) return toast(`${f.name} is too large. Max 100MB.`, "error");
   }
+
   $("upload-btn").textContent = "Uploading...";
   $("upload-btn").disabled = true;
   $("upload-progress").style.display = "block";
+
   try {
     const task = (window._tasks||[]).find(x=>x.id===uploadingTaskId);
     const existing = task?.uploads || [];
     const newUploads = [];
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       $("upload-progress-label").textContent = `Uploading ${file.name} (${i+1}/${files.length})...`;
       $("upload-bar").style.width = "0%";
+
       const result = await uploadToCloudinary(file, pct => {
         $("upload-bar").style.width = pct + "%";
         $("upload-bar-label").textContent = pct + "%";
       });
+
       newUploads.push({
         url: result.secure_url,
         type: file.type,
@@ -235,6 +186,7 @@ window.handleUpload = async () => {
         publicId: result.public_id
       });
     }
+
     await updateDoc(doc(db,"tasks",uploadingTaskId), {
       uploads: [...existing, ...newUploads]
     });
@@ -242,11 +194,13 @@ window.handleUpload = async () => {
     if (cu.role === "member") {
       await notifyAdmins(`${cu.name} uploaded ${newUploads.length} file(s) to: "${task?.title}"`, "upload", uploadingTaskId);
     }
+
     toast(`${newUploads.length} file(s) uploaded successfully! ✅`, "success");
     closeModal("upload-modal");
   } catch(e) {
     toast("Upload failed: " + e.message, "error");
   }
+
   $("upload-btn").textContent = "Upload";
   $("upload-btn").disabled = false;
 };
@@ -270,7 +224,6 @@ window.switchAuthTab = tab => {
   $("register-form").style.display= tab==="register" ? "" : "none";
   $("auth-error").style.display   = "none";
 };
-
 const authErr = m => { const e=$("auth-error"); e.textContent=m; e.style.display="block"; };
 
 window.handleLogin = async () => {
@@ -291,12 +244,14 @@ window.handleRegister = async () => {
   try {
     const cred=await createUserWithEmailAndPassword(auth,email,pass);
     await updateProfile(cred.user,{displayName:name});
+    // Admins are auto-approved, members need admin approval
     const approved = role==="admin";
     await setDoc(doc(db,"users",cred.user.uid),{
       name, email, role, approved,
       createdAt: serverTimestamp()
     });
     if (!approved) {
+      // Notify all admins of pending registration
       const adminSnap = await getDocs(query(collection(db,"users"),where("role","==","admin")));
       for (const d of adminSnap.docs) {
         await addDoc(collection(db,"notifications"),{
@@ -308,7 +263,9 @@ window.handleRegister = async () => {
           createdAt: serverTimestamp()
         });
       }
+      // Sign them out immediately — cannot access until approved
       await signOut(auth);
+      // Show pending screen
       $("auth-screen").style.display="none";
       $("pending-screen").style.display="flex";
       return;
@@ -326,6 +283,7 @@ onAuthStateChanged(auth, async user => {
     const snap=await getDoc(doc(db,"users",user.uid));
     if (!snap.exists()){ await signOut(auth); return; }
     const profile = snap.data();
+    // Block unapproved members
     if (!profile.approved && profile.role !== "admin") {
       await signOut(auth);
       $("auth-screen").style.display="none";
@@ -333,7 +291,6 @@ onAuthStateChanged(auth, async user => {
       return;
     }
     cu={id:user.uid,...snap.data()};
-    logDiag(`User logged in: ${cu.name} (${cu.role})`);
     $("pending-screen").style.display="none";
     initApp();
   } else {
@@ -356,9 +313,11 @@ function initApp() {
   document.querySelectorAll(".member-only").forEach(el=>el.style.display=cu.role==="member"?"":"none");
   subscribeAll();
   subscribeIntel();
+  // Check for deep link task ID in URL
   const urlParams = new URLSearchParams(window.location.search);
   const deepTaskId = urlParams.get("task");
   if(deepTaskId){
+    // Wait for tasks to load then open the task
     window._deepLinkTaskId = deepTaskId;
     showPage("dashboard");
   } else {
@@ -368,12 +327,10 @@ function initApp() {
 
 function subscribeAll(){
   unsubs.forEach(u=>u()); unsubs=[];
-  logDiag("Subscribing to tasks collection...");
   unsubs.push(onSnapshot(query(collection(db,"tasks"),orderBy("createdAt","desc")), snap=>{
-    logDiag(`✅ Tasks loaded: ${snap.docs.length} tasks received`);
     window._tasks=snap.docs.map(d=>({id:d.id,...d.data()}));
-    window._diagnostics.firebaseConnected = true;
     renderPage(currentPage);
+    // Handle deep link
     if(window._deepLinkTaskId){
       const dlTask=(window._tasks||[]).find(x=>x.id===window._deepLinkTaskId);
       if(dlTask){
@@ -381,6 +338,7 @@ function subscribeAll(){
         openTaskDetailModal(dlTask.id);
       }
     }
+    // Live-update open subtask/comment modals
     const stId=$("subtask-task-id")?.value;
     if(stId&&$("subtask-modal").classList.contains("open")){
       const t=(window._tasks||[]).find(x=>x.id===stId);
@@ -391,6 +349,7 @@ function subscribeAll(){
       const t=(window._tasks||[]).find(x=>x.id===cmId);
       if(t) renderCommentsList(t);
     }
+    // Update private badge — incomplete private tasks owned by or shared with me
     if(cu.role==="admin"){
       const privatePending=(window._tasks||[]).filter(t=>
         t.type==="private" &&
@@ -401,6 +360,7 @@ function subscribeAll(){
       const pb=$("nav-private-badge");
       if(pb){ pb.textContent=privatePending; pb.style.display=privatePending>0?"":"none"; }
     }
+    // Update in-progress badge for all users
     const uid=cu.id;
     const inProgressCount=(window._tasks||[]).filter(t=>{
       if(t.type==="assigned") return (t.acceptedBy||[]).find(a=>a.uid===uid)&&!(t.completedBy||[]).find(c=>c.uid===uid);
@@ -410,25 +370,13 @@ function subscribeAll(){
     }).length;
     const ipb=$("nav-inprogress-badge");
     if(ipb){ ipb.textContent=inProgressCount; ipb.style.display=inProgressCount>0?"":"none"; }
-  }, err => {
-    logDiag(`❌ Firestore subscription error: ${err.message}`, "error");
-    logDiag(`   Code: ${err.code}`, "error");
-    window._diagnostics.firebaseConnected = false;
-    if(err.code === "permission-denied") {
-      toast("❌ Firebase Permission Denied. Check security rules and API key.", "error");
-    } else if(err.code === "unavailable") {
-      toast("⚠️ Firebase service unavailable. Check your internet connection.", "error");
-    } else {
-      toast(`Firebase error: ${err.message}`, "error");
-    }
   }));
-
   unsubs.push(onSnapshot(query(collection(db,"notifications"),
     where("recipientId","==",cu.id),orderBy("createdAt","desc")), snap=>{
     window._notifs=snap.docs.map(d=>({id:d.id,...d.data()}));
     $("notif-dot").style.display=window._notifs.filter(n=>!n.read).length>0?"":"none";
   }));
-
+  // Watch pending user registrations (admin only)
   if(cu.role==="admin"){
     unsubs.push(onSnapshot(query(collection(db,"users"),where("approved","==",false)), snap=>{
       const pending=snap.docs.filter(d=>d.data().role!=="admin").length;
@@ -443,6 +391,7 @@ function subscribeAll(){
 
 // ── NAV ───────────────────────────────────────────
 window.showPage = name => {
+  // Block members from admin-only pages
   const adminPages = ["private","activity","all-tasks","team"];
   if(cu && cu.role==="member" && adminPages.includes(name)) {
     toast("Access restricted to admins only","error"); return;
@@ -453,7 +402,6 @@ window.showPage = name => {
   const nb=$("nav-"+name);  if(nb) nb.classList.add("active");
   currentPage=name; renderPage(name); closeNotifPanel();
 };
-
 function applyPriorityFilter(T){
   if(priorityFilter==="all") return T;
   return T.filter(t=>t.priority===priorityFilter);
@@ -469,7 +417,7 @@ window.setPriorityFilter = (f) => {
 
 function renderPage(name){
   const T=applyPriorityFilter(window._tasks||[]);
-  if(name==="dashboard") renderDashboard(window._tasks||[]);
+  if(name==="dashboard") renderDashboard(window._tasks||[]); // dashboard shows all for counts
   if(name==="my-tasks")  renderMyTasks(T);
   if(name==="in-progress") renderInProgress(T);
   if(name==="pool")      renderPool(T);
@@ -486,11 +434,15 @@ function renderDashboard(T){
   $("dash-sub").textContent=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   const isA=cu.role==="admin";
   const uid=cu.id;
+  // Members only see their own stats
   const myAssigned=T.filter(t=>t.type==="assigned"&&(t.assignees||[]).includes(uid));
   const poolTasks=T.filter(t=>t.type==="pool");
+  // Total for members: tasks they personally own (claimed/assigned) + available unclaimed pool
   const myClaimed=poolTasks.filter(t=>(t.claims||[]).find(c=>c.uid===uid));
   const availableUnclaimed=poolTasks.filter(t=>!(t.claims||[]).find(c=>!c.completedAt)&&t.status!=="completed");
   const totalCount=isA?T.length:myAssigned.length+myClaimed.length+availableUnclaimed.length;
+  // Pending for members = ONLY tasks assigned to THEM that they haven't started yet
+  // Pool tasks are NOT pending for someone who hasn't claimed them
   const pendingCount=isA?T.filter(t=>t.status==="pending").length:
     myAssigned.filter(t=>t.status==="pending").length;
   const inProgressCount=isA?T.filter(t=>t.status==="accepted").length:
@@ -505,6 +457,8 @@ function renderDashboard(T){
       if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===uid&&c.completedAt);
       return false;
     }).length;
+  // Recent Tasks for members = ONLY tasks they personally have touched
+  // Empty until they claim a pool task or are assigned one
   const myInProgressPool=poolTasks.filter(t=>(t.claims||[]).find(c=>c.uid===uid&&!c.completedAt));
   const myCompletedPool=poolTasks.filter(t=>(t.claims||[]).find(c=>c.uid===uid&&c.completedAt));
   const recentTasks=isA?T.slice(0,5):[
@@ -536,11 +490,13 @@ function renderDashboard(T){
       ${tapHint}
     </div>`;
   $("dash-recent").innerHTML=recentTasks.map(t=>miniCard(t)).join("")||empty("📭","No tasks yet");
+  // Render intel section for admins
   if(cu.role==="admin") renderIntelList();
   const myOpen=T.filter(t=>(t.assignees||[]).includes(cu.id)&&t.status!=="completed").length;
   const poolOpen=cu.role==="admin"
     ? T.filter(t=>t.type==="pool"&&t.status!=="completed"&&!(t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt)).length
     : T.filter(t=>t.type==="pool"&&t.status!=="completed"&&!(t.claims||[]).find(c=>!c.completedAt)).length;
+  // For members: sidebar badge shows available unclaimed tasks only
   const myInProgress=T.filter(t=>{
     if(t.type==="assigned") return (t.acceptedBy||[]).find(a=>a.uid===cu.id)&&!(t.completedBy||[]).find(c=>c.uid===cu.id);
     if(t.type==="pool") return (t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt);
@@ -576,6 +532,7 @@ function miniCard(t){
   </div>`;
 }
 
+// ── UPLOAD BUTTON HTML ────────────────────────────
 function uploadBtn(taskId) {
   return `<button class="btn btn-ghost btn-sm" onclick="openUploadModal('${taskId}')">📎 Upload File</button>`;
 }
@@ -608,21 +565,25 @@ function assignedCard(t){
              <div class="btn-row">${uploadBtn(t.id)}</div>`;
   else
     actions=`<div class="btn-row">${uploadBtn(t.id)}</div>`;
+
   return fullTaskCard(t,"tag-cyan","👤 Assigned to you",actions);
 }
 
 // ── IN PROGRESS ───────────────────────────────────
 function renderInProgress(T){
   const uid=cu.id;
+  // Assigned tasks accepted by me but not completed
   const assignedInProgress=T.filter(t=>
     t.type==="assigned" &&
     (t.acceptedBy||[]).find(a=>a.uid===uid) &&
     !(t.completedBy||[]).find(c=>c.uid===uid)
   );
+  // Pool tasks claimed by me but not completed
   const poolInProgress=T.filter(t=>
     t.type==="pool" &&
     (t.claims||[]).find(c=>c.uid===uid&&!c.completedAt)
   );
+  // Private tasks started but not completed (admin only)
   const privateInProgress=cu.role==="admin"?T.filter(t=>
     t.type==="private" &&
     (t.privateAcceptedBy||[]).find(a=>a.uid===uid) &&
@@ -665,8 +626,11 @@ function renderPool(T){
     if(t.status==="completed") return false;
     const claims=t.claims||[];
     if(isA){
+      // Admin sees ALL pool tasks (pending or accepted) — except ones they personally are working on
       return !claims.find(c=>c.uid===uid&&!c.completedAt);
     } else {
+      // Member sees ONLY unclaimed tasks (no active claims by anyone)
+      // Their own in-progress tasks go to In Progress page not pool
       if(claims.find(c=>c.uid===uid&&!c.completedAt)) return false;
       if(claims.find(c=>!c.completedAt)) return false;
       return true;
@@ -697,12 +661,14 @@ function poolCard(t){
     actions=`<div class="time-stamp">⏱ Started: ${fmt(myEntry.startedAt)}</div>
              <div class="time-stamp done">✅ Completed: ${fmt(myEntry.completedAt)}</div>
              <div class="btn-row">${uploadBtn(t.id)}</div>`;
+
   const adminBtns=cu.role==="admin"
     ?`<div style="display:flex;gap:6px;flex-shrink:0;">
         <button class="btn btn-ghost btn-sm" onclick="openEditTask('${t.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')">Del</button>
       </div>`:"";
   const claimCount=(t.claims||[]).length;
+
   return `<div class="task-accept-card">
     <div class="task-card-top">
       <div style="flex:1;">
@@ -727,7 +693,9 @@ function poolCard(t){
 function renderPrivate(T){
   const uid=cu.id;
   const mine=T.filter(t=>t.type==="private"&&(t.ownerId===uid||(t.sharedWith||[]).includes(uid)));
+  // Pending = not yet started by me
   const pending=mine.filter(t=>t.status==="pending"&&!(t.privateAcceptedBy||[]).find(a=>a.uid===uid));
+  // In progress = started by me but not done
   const inProg=mine.filter(t=>(t.privateAcceptedBy||[]).find(a=>a.uid===uid)&&!(t.privateCompletedBy||[]).find(c=>c.uid===uid));
   let html="";
   if(pending.length>0){
@@ -787,7 +755,6 @@ window.filterAll=(f,btn)=>{
   btn.classList.add("active");
   renderAllTasks(window._tasks||[]);
 };
-
 function renderAllTasks(T){
   let L=[...T];
   if(window._af==="assigned") L=L.filter(t=>t.type==="assigned");
@@ -817,6 +784,7 @@ function adminCard(t){
     ).join("");
   if(t.type==="private"&&t.completedAt)
     ts=`<div class="time-stamp done">✅ Completed: ${fmt(t.completedAt)}</div>`;
+
   return `<div class="task-accept-card">
     <div class="task-card-top">
       <div style="flex:1;">
@@ -994,6 +962,8 @@ async function renderTeam(T){
   const users=snap.docs.map(d=>({id:d.id,...d.data()}));
   const pending=users.filter(u=>!u.approved && u.role!=="admin");
   const approved=users.filter(u=>u.approved || u.role==="admin");
+
+  // Pending approvals section
   let pendingHTML="";
   if(pending.length>0){
     pendingHTML=`<div style="margin-bottom:20px;">
@@ -1013,6 +983,7 @@ async function renderTeam(T){
         </div>`).join("")}
     </div>`;
   }
+
   $("team-pending").innerHTML=pendingHTML;
   $("team-body").innerHTML=approved.map(u=>{
     const open=T.filter(t=>(t.assignees||[]).includes(u.id)&&t.status!=="completed").length;
@@ -1124,6 +1095,7 @@ window.saveTask = async () => {
       await logAct(`${cu.name} created ${type} task: "${title}"`, "create", ref.id);
       toast("Task created ⚡","success");
     }
+    // Upload any attached files
     const pending=window._pendingAttachments||[];
     if(pending.length>0 && taskId){
       $("save-task-btn").textContent=`Uploading ${pending.length} file(s)...`;
@@ -1151,20 +1123,22 @@ window.saveTask = async () => {
   $("save-task-btn").textContent=editingTaskId?"Save Changes":"Create Task";
 };
 
-// Remainder of the file is identical to the original...
-// Due to character limits, continuing with all remaining functions...
-
+// ── COMPLETED REPORT ──────────────────────────────
 window.openStatModal = (filter) => {
   const T = window._tasks || [];
   const isAdmin = cu.role === "admin";
   const uid = cu.id;
+
   let filtered = [];
   let title = "All Tasks";
   let color = "var(--cyan)";
   const myAss=T.filter(t=>t.type==="assigned"&&(t.assignees||[]).includes(uid));
   const pool=T.filter(t=>t.type==="pool");
+
   if(filter==="pending"){
     title="⏳ Pending Tasks"; color="var(--gold)";
+    // Pending for members = ONLY their assigned tasks not yet started
+    // Pool tasks are not "pending" for them until they claim one
     filtered=isAdmin?T.filter(t=>t.status==="pending"):
       myAss.filter(t=>t.status==="pending");
   } else if(filter==="inprogress"){
@@ -1185,11 +1159,13 @@ window.openStatModal = (filter) => {
       });
   } else {
     title="All Tasks"; color="var(--cyan)";
+    // Members only see tasks they personally own or have claimed
     filtered=isAdmin?T:[
       ...myAss,
       ...pool.filter(t=>(t.claims||[]).find(c=>c.uid===uid))
     ];
   }
+
   if(!filtered.length){
     $("stat-modal-body").innerHTML = empty("🎉","No tasks in this category yet");
     $("stat-modal-title").textContent = title;
@@ -1197,9 +1173,11 @@ window.openStatModal = (filter) => {
     $("stat-modal").classList.add("open");
     return;
   }
+
   const typeLabel = t => ({assigned:"👤 Assigned",pool:"🌊 Pool",private:"🔒 Private"}[t.type]||t.type);
   const typeCls   = t => ({assigned:"tag-cyan",pool:"tag-gold",private:"tag-purple"}[t.type]||"tag-gray");
   const stCls     = t => ({pending:"tag-gray",accepted:"tag-gold",completed:"tag-green"}[t.status]||"tag-gray");
+
   $("stat-modal-body").innerHTML = filtered.map(t => {
     const subs = t.subtasks||[];
     const comments = t.comments||[];
@@ -1211,6 +1189,8 @@ window.openStatModal = (filter) => {
         </div>
         <span style="font-size:.7rem;color:var(--soft);">${subs.filter(s=>s.done).length}/${subs.length} steps</span>
       </div>` : "";
+
+    // Timestamps for completed
     let timestamps = "";
     if(t.status==="completed"){
       if(t.type==="assigned"&&(t.completedBy||[]).length>0)
@@ -1220,6 +1200,7 @@ window.openStatModal = (filter) => {
       else if(t.completedAt)
         timestamps = `<div class="time-stamp done" style="margin-top:4px;">✅ ${fmt(t.completedAt)}</div>`;
     }
+
     return `<div class="report-card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
         <div style="flex:1;cursor:pointer;" onclick="closeModal('stat-modal');openTaskDetailModal('${t.id}')">
@@ -1232,6 +1213,7 @@ window.openStatModal = (filter) => {
             ${uploads.length>0?`<span class="task-date">📎 ${uploads.length}</span>`:""}
             ${comments.length>0?`<span class="task-date">💬 ${comments.length}</span>`:""}
           </div>
+          ${whoHTML}
           ${progressBar}
           ${timestamps}
         </div>
@@ -1245,6 +1227,7 @@ window.openStatModal = (filter) => {
       </div>
     </div>`;
   }).join("");
+
   $("stat-modal-title").textContent = title + ` (${filtered.length})`;
   $("stat-modal-title").style.color = color;
   $("stat-modal").classList.add("open");
@@ -1253,21 +1236,29 @@ window.openStatModal = (filter) => {
 window.openCompletedReport = () => {
   if(cu.role!=="admin"){ toast("Completion report is for admins only","error"); return; }
   const T = window._tasks || [];
+  const isAdmin = true;
+  // Admins see ALL completed tasks including private
   const completed = T.filter(t => t.status === "completed");
+
   if (!completed.length) {
     $("report-body").innerHTML = empty("🎉","No completed tasks yet");
     $("report-modal").classList.add("open");
     return;
   }
+
+  // Sort by most recently completed
   const sorted = [...completed].sort((a,b) => {
     const aTime = getCompletedTime(a);
     const bTime = getCompletedTime(b);
     if (!aTime) return 1; if (!bTime) return -1;
     return bTime.seconds - aTime.seconds;
   });
+
   $("report-body").innerHTML = sorted.map(t => {
     const typeLabel = {assigned:"👤 Assigned",pool:"🌊 Pool",private:"🔒 Private"}[t.type]||t.type;
     const typeCls   = {assigned:"tag-cyan",pool:"tag-gold",private:"tag-purple"}[t.type]||"tag-gray";
+
+    // Build who completed it and when
     let completions = "";
     if (t.type==="assigned" && (t.completedBy||[]).length>0) {
       completions = t.completedBy.map(c=>`
@@ -1305,6 +1296,7 @@ window.openCompletedReport = () => {
         completions=`<div class="report-entry"><div class="report-time">✅ Completed: ${fmt(t.completedAt)}</div></div>`;
       }
     }
+
     const uploads = (t.uploads||[]).length;
     return `<div class="report-card">
       <div class="report-card-header">
@@ -1323,6 +1315,7 @@ window.openCompletedReport = () => {
       ${completions}
     </div>`;
   }).join("");
+
   $("report-modal").classList.add("open");
 };
 
@@ -1339,6 +1332,7 @@ window.downloadSingleTaskPDF = (taskId) => {
   generateTaskPDF(t);
 };
 
+// Keep bulk download accessible from console if ever needed
 window.downloadPDFReport = () => {
   const T = window._tasks || [];
   const completed = T.filter(t => t.status === "completed");
@@ -1347,7 +1341,9 @@ window.downloadPDFReport = () => {
     if(!aT) return 1; if(!bT) return -1;
     return bT.seconds - aT.seconds;
   });
+
   const now = new Date().toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
+
   let html = `
     <!DOCTYPE html><html><head><meta charset="UTF-8">
     <title>Atubre Task Flow — Completion Report</title>
@@ -1400,6 +1396,7 @@ window.downloadPDFReport = () => {
       <div class="summary-box"><div class="num">${completed.filter(t=>t.type==="pool").length}</div><div class="lbl">Open Pool</div></div>
       <div class="summary-box"><div class="num">${completed.filter(t=>t.type==="private").length}</div><div class="lbl">Private</div></div>
     </div>`;
+
   sorted.forEach(t => { html += buildTaskBlock(t); });
   html += `<div class="footer">Atubre Task Flow — Confidential Admin Report · Generated ${now}</div></body></html>`;
   const win = window.open("","_blank","width=800,height=900");
@@ -1407,9 +1404,12 @@ window.downloadPDFReport = () => {
   setTimeout(()=>win.print(), 600);
 };
 
+// ── SINGLE TASK PDF ────────────────────────────────
 function generateTaskPDF(t) {
   const now = new Date().toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
   const typeLabel = {assigned:"Assigned",pool:"Open Pool",private:"Private"}[t.type]||t.type;
+  const safeName = t.title.replace(/[^a-z0-9]/gi,"_").toLowerCase();
+
   const pdfStyles = `
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a2e; background: #fff; padding: 30px; }
@@ -1439,10 +1439,12 @@ function generateTaskPDF(t) {
     .uploads-row { font-size: 10px; color: #555; margin-top: 4px; }
     .footer { margin-top: 24px; border-top: 1px solid #e0e0e0; padding-top: 12px; text-align: center; font-size: 9px; color: #999; }
     @media print { body { padding: 15px; } }`;
+
   let people = buildPeopleHTML(t);
   const uploads = t.uploads||[];
   const typeCls = {assigned:"tag-assigned",pool:"tag-pool",private:"tag-private"}[t.type]||"";
   const priCls  = {high:"tag-pri-high",medium:"tag-pri-medium",low:"tag-pri-low"}[t.priority||"low"]||"";
+
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
     <title>Task Report — ${t.title}</title>
     <style>${pdfStyles}</style></head><body>
@@ -1479,6 +1481,7 @@ function generateTaskPDF(t) {
     </div>
     <div class="footer">Atubre Task Flow — Confidential Admin Report · ${now}</div>
     </body></html>`;
+
   const win = window.open("","_blank","width=800,height=900");
   win.document.write(html); win.document.close(); win.focus();
   setTimeout(()=>win.print(), 600);
@@ -1549,14 +1552,11 @@ async function notifyAdmins(msg,type,taskId){
     if(d.id!==cu.id)
       await addDoc(collection(db,"notifications"),{recipientId:d.id,msg,type,taskId,read:false,createdAt:serverTimestamp()});
 }
-
 window.toggleNotifPanel=()=>{
   $("notif-panel").classList.toggle("open");
   if($("notif-panel").classList.contains("open")) renderNotifs();
 };
-
 window.closeNotifPanel=()=>$("notif-panel").classList.remove("open");
-
 async function renderNotifs(){
   const N=window._notifs||[];
   for(const n of N.filter(x=>!x.read)) await updateDoc(doc(db,"notifications",n.id),{read:true});
@@ -1573,7 +1573,6 @@ async function renderNotifs(){
       <div>${n.msg}</div><div class="notif-time">${fmt(n.createdAt)}</div>
     </div>`).join(""):`<div style="color:var(--muted);text-align:center;padding:20px;font-size:.82rem;">No notifications</div>`;
 }
-
 window.clearNotifications=async()=>{for(const n of (window._notifs||[])) await deleteDoc(doc(db,"notifications",n.id));};
 
 async function logAct(msg,type,taskId){
@@ -1582,6 +1581,7 @@ async function logAct(msg,type,taskId){
 
 window.closeModal=id=>{
   document.getElementById(id).classList.remove("open");
+  // Clear attachments when task modal closes
   if(id==="task-modal"){
     const inp=document.getElementById("task-attach-input");
     if(inp) inp.value="";
@@ -1611,11 +1611,9 @@ window.previewTaskAttachments = () => {
   document.getElementById("task-attach-status").textContent=files.length>0?`${files.length} file(s) selected — will upload when task is saved`:"";
 };
 
-// ── REST OF FILE (subtasks, comments, follow-up, intel, share, detail modal, cancel, undo, pdf, mobile nav, closing modals)
-// [Due to character limit of output, the remaining functions are identical to the original file]
-// All remaining functionality: subtasks, comments, follow-up tasks, intel posting, task sharing, detail modal,
-// cancel/undo operations, PDF generation, mobile navigation, and modal closing are preserved from the original
-
+// ══════════════════════════════════════════════════
+// ── SUB-TASKS ─────────────────────────────────────
+// ══════════════════════════════════════════════════
 window.openSubtaskModal = async (taskId) => {
   const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
   $("subtask-task-id").value=taskId;
@@ -1675,30 +1673,37 @@ window.deleteSubtask = async (taskId,idx) => {
   await updateDoc(doc(db,"tasks",taskId),{subtasks:subs});
 };
 
+// ══════════════════════════════════════════════════
+// ── COMMENTS / NOTES ──────────────────────────────
+// ══════════════════════════════════════════════════
 window.openCommentsModal = async (taskId) => {
   const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
   $("comments-task-id").value=taskId;
-  $("comments-title-display").textContent=t.title;
-  $("comments-list").innerHTML="";
-  renderComments(t);
+  $("comments-task-title").textContent=t.title;
+  $("new-comment-input").value="";
+  renderCommentsList(t);
   $("comments-modal").classList.add("open");
 };
 
-function renderComments(t) {
-  const comms=t.comments||[];
-  if(!comms.length){
-    $("comments-list").innerHTML=`<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:16px;">No comments yet</div>`;
+function renderCommentsList(t) {
+  const comments=t.comments||[];
+  if(!comments.length){
+    $("comments-list").innerHTML=`<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:20px;">No notes yet — be the first to add one</div>`;
     return;
   }
-  $("comments-list").innerHTML=comms.map(c=>`
-    <div style="background:var(--card);border-radius:8px;padding:12px;margin-bottom:8px;border-left:2px solid var(--cyan);">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-        <div style="font-weight:500;color:var(--text);font-size:.85rem;">${c.by||"Unknown"}</div>
-        <span style="font-size:.7rem;color:var(--muted);">${fmt(c.at)}</span>
+  $("comments-list").innerHTML=[...comments].reverse().map((c,i)=>{
+    const isMe=c.userId===cu.id;
+    const realIdx=comments.length-1-i;
+    return `<div class="comment-item ${isMe?'comment-mine':''}">
+      <div class="comment-header">
+        <div class="mini-avatar" style="${isMe?'background:var(--cyan);color:#000;':'background:var(--gold);color:#000;'}">${ini(c.userName)}</div>
+        <strong style="font-size:.85rem;">${c.userName}</strong>
+        <span style="color:var(--muted);font-size:.72rem;margin-left:auto;">${fmt(c.createdAt)}</span>
+        ${isMe||cu.role==="admin"?`<button onclick="deleteComment('${t.id}',${realIdx})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:0 4px;" title="Delete">🗑️</button>`:""}
       </div>
-      <div style="color:var(--soft);font-size:.82rem;line-height:1.4;">${(c.text||"").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
-      ${cu.role==="admin"?`<button onclick="deleteComment('${t.id}','${c.at}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.7rem;margin-top:6px;">🗑️ Delete</button>`:""}
-    </div>`).join("");
+      <div class="comment-text">${c.text}</div>
+    </div>`;
+  }).join("");
 }
 
 window.addComment = async () => {
@@ -1706,286 +1711,1087 @@ window.addComment = async () => {
   const text=$("new-comment-input").value.trim();
   if(!text) return;
   const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
-  const comms=[...(t.comments||[]),{by:cu.name,text,at:new Date().toISOString()}];
-  await updateDoc(doc(db,"tasks",taskId),{comments:comms});
+  const comment={text,userName:cu.name,userId:cu.id,createdAt:new Date().toISOString()};
+  const comments=[...(t.comments||[]),comment];
+  await updateDoc(doc(db,"tasks",taskId),{comments});
   $("new-comment-input").value="";
-  renderComments(t);
-  toast("Comment added ✓","success");
+  // Notify admins if member commented
+  if(cu.role==="member") await notifyAdmins(`${cu.name} left a note on: "${t.title}" — "${text.substr(0,60)}${text.length>60?'...':''}"`, "comment", taskId);
+  toast("Note added ✓","success");
 };
 
-window.deleteComment = async (taskId, commentAt) => {
+window.deleteComment = async (taskId,idx) => {
   const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
-  const comms=(t.comments||[]).filter(c=>c.at!==commentAt);
-  await updateDoc(doc(db,"tasks",taskId),{comments:comms});
-  renderComments(t);
+  const comments=(t.comments||[]).filter((_,i)=>i!==idx);
+  await updateDoc(doc(db,"tasks",taskId),{comments});
 };
 
-window.openFollowUpModal = (parentTaskId) => {
-  if(!parentTaskId) return;
-  $("followup-parent-id").value=parentTaskId;
-  $("followup-title").value="";
-  $("followup-desc").value="";
-  $("followup-priority").value="medium";
+// Live update comments modal when tasks update
+const _origRenderPage = renderPage;
+
+// ══════════════════════════════════════════════════
+// ── FOLLOW-UP TASK ────────────────────────────────
+// ══════════════════════════════════════════════════
+window.openFollowUpModal = (taskId) => {
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  $("followup-parent-id").value=taskId;
+  $("followup-title-input").value=`Follow-up: ${t.title}`;
+  $("followup-desc-input").value="";
+  $("followup-priority-input").value=t.priority||"medium";
+  $("followup-due-input").value="";
+  $("followup-parent-title").textContent=t.title;
   $("followup-modal").classList.add("open");
 };
 
 window.createFollowUp = async () => {
   const parentId=$("followup-parent-id").value;
-  const title=$("followup-title").value.trim();
-  const desc=$("followup-desc").value.trim();
-  const priority=$("followup-priority").value;
-  
-  if(!title || !parentId) { toast("Title required","error"); return; }
-  
-  const newTask={
-    title,desc,priority,
-    type:"assigned",
-    assignedTo:cu.id,
-    createdBy:cu.name,
-    createdAt:serverTimestamp(),
-    parentTaskId,isFollowUp:true,
-    status:"pending"
-  };
-  
-  try{
-    const docRef=await addDoc(collection(db,"tasks"),newTask);
-    toast("Follow-up task created ✓","success");
+  const title=$("followup-title-input").value.trim();
+  const desc=$("followup-desc-input").value.trim();
+  if(!title) return toast("Please enter a title","error");
+  const parent=(window._tasks||[]).find(x=>x.id===parentId); if(!parent) return;
+  $("followup-save-btn").textContent="Creating...";
+  try {
+    // Create the follow-up task
+    const ref=await addDoc(collection(db,"tasks"),{
+      title, desc,
+      priority: $("followup-priority-input").value,
+      due: $("followup-due-input").value.trim(),
+      tag: parent.tag||"",
+      type: parent.type,
+      assignees: parent.assignees||[],
+      sharedWith: parent.sharedWith||[],
+      status:"pending",
+      acceptedBy:[],completedBy:[],claims:[],uploads:[],subtasks:[],comments:[],
+      ownerId:cu.id,createdBy:cu.id,
+      parentTaskId:parentId,
+      isFollowUp:true,
+      createdAt:serverTimestamp()
+    });
+    // Mark parent as having a follow-up
+    await updateDoc(doc(db,"tasks",parentId),{
+      hasFollowUp:true,
+      followUpId:ref.id,
+      followUpStatus:"pending"
+    });
+    await logAct(`${cu.name} created follow-up task for: "${parent.title}"`, "create", ref.id);
+    await notifyAdmins(`Follow-up created for: "${parent.title}" — "${title}"`, "create", ref.id);
+    toast("Follow-up task created! 🔁","success");
     closeModal("followup-modal");
-  }catch(e){
-    logDiag("Error creating follow-up: "+e.message,"error");
-    toast("Error creating follow-up","error");
-  }
+  } catch(e){ toast("Error: "+e.message,"error"); }
+  $("followup-save-btn").textContent="Create Follow-up";
 };
 
-window.subscribeIntel = (taskId) => {
-  if(!taskId) return;
-  const unsub=onSnapshot(query(collection(db,"intel"),where("taskId","==",taskId),orderBy("createdAt","desc")), snap=>{
-    const intel=snap.docs.map(d=>({id:d.id,...d.data()}));
-    window._intel=intel;
-    renderIntelList(taskId);
-  }, err=>logDiag("Intel subscribe error: "+err.message,"error"));
-  unsubs.push(unsub);
-};
+// ══════════════════════════════════════════════════
+// ── LATEST INTEL ──────────────────────────────────
+// ══════════════════════════════════════════════════
+let intelUnsub = null;
 
-function renderIntelList(taskId) {
-  const intel=window._intel||[];
-  if(!intel.length){
-    $("intel-list").innerHTML=`<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:16px;">No intel shared yet</div>`;
-    return;
-  }
-  $("intel-list").innerHTML=intel.map(i=>`
-    <div style="background:var(--card);border-radius:8px;padding:12px;margin-bottom:8px;border-left:2px solid var(--purple);">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-        <div style="font-weight:500;color:var(--text);font-size:.85rem;">${i.by||"Unknown"}</div>
-        <span style="font-size:.7rem;color:var(--muted);">${fmt(i.createdAt)}</span>
-      </div>
-      ${i.url?`<a href="${i.url}" target="_blank" style="color:var(--cyan);text-decoration:none;font-size:.82rem;word-break:break-all;">📎 ${i.url}</a><br>`:""} 
-      ${i.text?`<div style="color:var(--soft);font-size:.82rem;margin-top:6px;">${(i.text||"").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>`:""}
-      ${cu.role==="admin"?`<button onclick="deleteIntel('${i.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.7rem;margin-top:6px;">🗑️ Delete</button>`:""}
-    </div>`).join("");
+function subscribeIntel() {
+  if(cu.role !== "admin") return;
+  if(intelUnsub) intelUnsub();
+  const q = query(collection(db,"intel"), orderBy("createdAt","desc"));
+  intelUnsub = onSnapshot(q, snap => {
+    window._intel = snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderIntelList();
+  });
+  unsubs.push(intelUnsub);
 }
 
-window.openIntelUpload = (taskId) => {
-  if(!taskId) return;
-  $("intel-task-id").value=taskId;
-  $("intel-url").value="";
-  $("intel-text").value="";
+function renderIntelList() {
+  if(cu.role !== "admin") return;
+  const el = $("intel-list");
+  if(!el) return;
+  const items = window._intel || [];
+  if(!items.length){
+    el.innerHTML = `<div style="background:rgba(0,229,255,.03);border:1px dashed rgba(0,229,255,.15);border-radius:12px;padding:20px;text-align:center;color:var(--muted);font-size:.82rem;">
+      No intel posted yet — click <strong style="color:var(--cyan);">＋ Add Intel</strong> to post something
+    </div>`;
+    return;
+  }
+  el.innerHTML = items.map(item => {
+    const fileIcon = item.fileType?.startsWith("image") ? "🖼️" :
+                     item.fileType?.startsWith("video") ? "🎥" :
+                     item.fileType?.includes("pdf") ? "📄" : "📎";
+    const isImage = item.fileType?.startsWith("image");
+    const isVideo = item.fileType?.startsWith("video");
+    return `<div class="intel-card">
+      <div class="intel-card-top">
+        <div style="flex:1;">
+          <div class="intel-title">${item.title}</div>
+          ${item.note?`<div class="intel-note">${item.note}</div>`:""}
+        ${item.link?`<div style="margin-top:10px;">
+          <a href="${item.link}" target="_blank" 
+             style="display:inline-flex;align-items:center;gap:8px;background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.3);border-radius:10px;padding:9px 16px;color:var(--cyan);text-decoration:none;font-size:.82rem;font-family:'Inter',sans-serif;transition:all .2s;"
+             onmouseover="this.style.background='rgba(0,229,255,.15)'"
+             onmouseout="this.style.background='rgba(0,229,255,.08)'">
+            📄 Open Report
+          </a>
+        </div>`:""}
+          <div class="intel-meta">
+            <span style="color:var(--cyan);font-size:.7rem;">🔐 Admin Only</span>
+            <span class="task-date">By ${item.postedBy}</span>
+            <span class="task-date">${fmt(item.createdAt)}</span>
+          </div>
+        </div>
+        <button onclick="deleteIntel('${item.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;padding:4px 6px;flex-shrink:0;" title="Delete">🗑️</button>
+      </div>
+      ${item.fileUrl ? `
+        <div class="intel-media">
+          ${isImage ? `<img src="${item.fileUrl}" class="intel-img" onclick="openLightbox('${item.fileUrl}')">` :
+            isVideo ? `<video src="${item.fileUrl}" controls class="intel-video"></video>` :
+            `<a href="${item.fileUrl.replace('/upload/', '/upload/fl_attachment/')}" download="${item.fileName||'document'}" class="intel-doc-link">${fileIcon} ${item.fileName||"Download File"} ⬇</a>`}
+        </div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+window.openIntelUpload = () => {
+  $("intel-title-input").value = "";
+  $("intel-note-input").value = "";
+  $("intel-link-input").value = "";
+  $("intel-file-input").value = "";
+  $("intel-file-preview").innerHTML = "";
+  $("intel-upload-status").textContent = "";
   $("intel-modal").classList.add("open");
 };
 
+window.previewIntelFile = () => {
+  const file = $("intel-file-input").files[0];
+  if(!file) return;
+  const prev = $("intel-file-preview");
+  if(file.type.startsWith("image")){
+    const url = URL.createObjectURL(file);
+    prev.innerHTML = `<img src="${url}" style="max-width:100%;max-height:160px;border-radius:10px;border:1px solid rgba(0,229,255,.2);margin-top:8px;">`;
+  } else {
+    prev.innerHTML = `<div style="background:var(--card);border-radius:8px;padding:8px 12px;font-size:.8rem;color:var(--soft);margin-top:8px;">${file.type.startsWith("video")?"🎥":"📄"} ${file.name}</div>`;
+  }
+};
+
 window.saveIntel = async () => {
-  const taskId=$("intel-task-id").value;
-  const url=$("intel-url").value.trim();
-  const text=$("intel-text").value.trim();
-  
-  if(!url && !text) { toast("Add a link or note","error"); return; }
-  
-  try{
-    await addDoc(collection(db,"intel"),{
-      taskId,by:cu.name,url,text,createdAt:serverTimestamp()
+  const title = $("intel-title-input").value.trim();
+  if(!title) return toast("Please enter a title for this intel","error");
+  const file = $("intel-file-input").files[0];
+  $("intel-save-btn").textContent = "Saving...";
+  try {
+    let fileUrl = null, fileName = null, fileType = null;
+    if(file){
+      $("intel-save-btn").textContent = "Uploading file...";
+      $("intel-upload-status").textContent = "Uploading...";
+      const result = await uploadToCloudinary(file, pct => {
+        $("intel-upload-status").textContent = `Uploading... ${pct}%`;
+      });
+      fileUrl = result.secure_url;
+      fileName = file.name;
+      fileType = file.type;
+      $("intel-upload-status").textContent = "";
+    }
+    await addDoc(collection(db,"intel"), {
+      title,
+      note: $("intel-note-input").value.trim(),
+      link: $("intel-link-input").value.trim(),
+      fileUrl, fileName, fileType,
+      postedBy: cu.name,
+      postedById: cu.id,
+      adminOnly: true,
+      createdAt: serverTimestamp()
     });
-    toast("Intel shared ✓","success");
+    await logAct(`${cu.name} posted intel: "${title}"`, "create", null);
+    toast("Intel posted 🔐","success");
     closeModal("intel-modal");
-    subscribeIntel(taskId);
-  }catch(e){
-    logDiag("Error saving intel: "+e.message,"error");
-    toast("Error sharing intel","error");
-  }
+  } catch(e){ toast("Error: "+e.message,"error"); }
+  $("intel-save-btn").textContent = "Post Intel";
 };
 
-window.deleteIntel = async (intelId) => {
-  try{
-    await deleteDoc(doc(db,"intel",intelId));
-    toast("Deleted ✓","success");
-  }catch(e){
-    logDiag("Error deleting intel: "+e.message,"error");
-  }
+window.deleteIntel = async (id) => {
+  if(!confirm("Delete this intel post?")) return;
+  await deleteDoc(doc(db,"intel",id));
+  toast("Deleted","info");
 };
 
-window.shareTask = (taskId) => {
-  const t=(window._tasks||[]).find(x=>x.id===taskId);
-  if(!t) return;
-  $("share-task-id").value=taskId;
-  $("share-link-display").innerHTML="";
-  $("share-with-list").innerHTML="";
-  renderShareList(t);
+// ── SHARE TASK ───────────────────────────────────
+window.shareTask = async (taskId) => {
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  const baseUrl = window.location.origin + window.location.pathname;
+  const shareUrl = `${baseUrl}?task=${taskId}`;
+
+  // Build share message
+  const typeLabel={assigned:"Assigned Task",pool:"Open Pool Task",private:"Private Task"}[t.type]||"Task";
+  const priEmoji={high:"🔴",medium:"🟡",low:"🟢"}[t.priority||"low"]||"⚡";
+  const msg = `${priEmoji} *Atubre Task Flow*\n\n*${t.title}*\n${t.type==="pool"?"🌊 Open Pool — anyone can claim this":""}${t.desc?`\n\n${t.desc.substr(0,200)}${t.desc.length>200?"...":""}`:""}${t.due?`\n\n📅 Due: ${t.due}`:""}\n\n👉 Open task: ${shareUrl}`;
+
+  // Try native share (mobile) first
+  if(navigator.share){
+    try {
+      await navigator.share({ title: `Atubre Task: ${t.title}`, text: msg, url: shareUrl });
+      return;
+    } catch(e){ if(e.name==="AbortError") return; }
+  }
+
+  // Fallback — show share modal
+  $("share-url-input").value=shareUrl;
+  $("share-whatsapp-btn").href=`https://wa.me/?text=${encodeURIComponent(msg)}`;
+  $("share-task-name").textContent=t.title;
   $("share-modal").classList.add("open");
 };
 
-function renderShareList(t) {
-  const sharedWith=t.sharedWith||[];
-  $("share-with-list").innerHTML=sharedWith.length?sharedWith.map(id=>`
-    <div style="background:var(--card);padding:8px 12px;border-radius:6px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;font-size:.82rem;">
-      <span>${id}</span>
-      ${cu.role==="admin"?`<button onclick="unshareTask('${t.id}','${id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;">✕</button>`:""}
-    </div>`).join(""):`<div style="color:var(--muted);font-size:.82rem;padding:12px;text-align:center;">Not shared yet</div>`;
-}
-
 window.copyShareLink = () => {
-  const taskId=$("share-task-id").value;
-  const link=window.location.origin+"?shared="+taskId;
-  navigator.clipboard.writeText(link).then(()=>toast("Link copied ✓","success")).catch(()=>toast("Copy failed","error"));
+  const input=$("share-url-input");
+  input.select();
+  input.setSelectionRange(0,9999);
+  try { document.execCommand("copy"); toast("Link copied! ✓","success"); }
+  catch(e){ navigator.clipboard.writeText(input.value).then(()=>toast("Link copied! ✓","success")); }
 };
 
-window.unshareTask = async (taskId, userId) => {
-  const t=(window._tasks||[]).find(x=>x.id===taskId);
-  if(!t) return;
-  const updated=(t.sharedWith||[]).filter(id=>id!==userId);
-  await updateDoc(doc(db,"tasks",taskId),{sharedWith:updated});
-  renderShareList(t);
-};
-
+// ── TASK DETAIL MODAL ─────────────────────────────
 window.openTaskDetailModal = (taskId) => {
-  const t=(window._tasks||[]).find(x=>x.id===taskId);
-  if(!t) return;
-  $("detail-task-title").textContent=t.title;
-  $("detail-task-desc").textContent=t.desc||"No description";
-  $("detail-task-priority").textContent=(t.priority||"medium").toUpperCase();
-  $("detail-task-status").textContent=(t.status||"pending").toUpperCase();
-  $("detail-task-created").textContent=fmt(t.createdAt);
-  $("detail-task-created-by").textContent=t.createdBy||"Unknown";
+  const t=(window._tasks||[]).find(x=>x.id===taskId); if(!t) return;
+  const typeLabel={assigned:"👤 Assigned",pool:"🌊 Open Pool",private:"🔒 Private"}[t.type]||t.type;
+  const typeCls={assigned:"tag-cyan",pool:"tag-gold",private:"tag-purple"}[t.type]||"tag-gray";
+  const subs=t.subtasks||[];
+  const comments=t.comments||[];
+  const uploads=t.uploads||[];
+
+  $("detail-modal-body").innerHTML=`
+    <div style="margin-bottom:16px;">
+      <div style="font-size:1.1rem;font-weight:600;margin-bottom:8px;">${t.title}</div>
+      <div class="task-meta" style="margin-bottom:10px;">
+        <span class="tag ${typeCls}">${typeLabel}</span>
+        ${t.tag?`<span class="tag tag-soft">${t.tag}</span>`:""}
+        <span class="pri-tag-${t.priority||"low"}">${t.priority} priority</span>
+        ${t.due?`<span class="task-date">📅 ${t.due}</span>`:""}
+        ${t.status==="completed"?`<span class="tag tag-green">✓ Completed</span>`:`<span class="tag tag-gold">${t.status}</span>`}
+      </div>
+      ${t.desc?`<div style="background:var(--card);border-radius:10px;padding:12px 14px;font-size:.85rem;color:var(--soft);line-height:1.6;margin-bottom:12px;">${t.desc}</div>`:""}
+    </div>
+    ${subs.length>0?`
+      <div style="margin-bottom:14px;">
+        <div class="section-title" style="margin-top:0;">Steps (${subs.filter(s=>s.done).length}/${subs.length})</div>
+        ${subs.map(s=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(0,229,255,.06);">
+          <span style="font-size:.9rem;">${s.done?"✅":"⬜"}</span>
+          <span style="font-size:.84rem;${s.done?"text-decoration:line-through;color:var(--muted);":""}">${s.text}</span>
+        </div>`).join("")}
+      </div>`:""}
+    ${comments.length>0?`
+      <div style="margin-bottom:14px;">
+        <div class="section-title" style="margin-top:0;">Field Notes (${comments.length})</div>
+        ${[...comments].reverse().slice(0,3).map(c=>`
+          <div style="background:var(--card);border-radius:9px;padding:9px 12px;margin-bottom:6px;font-size:.82rem;">
+            <strong>${c.userName}</strong> <span style="color:var(--muted);font-size:.72rem;">${fmt(c.createdAt)}</span>
+            <div style="margin-top:4px;color:var(--soft);">${c.text}</div>
+          </div>`).join("")}
+        ${comments.length>3?`<div style="color:var(--muted);font-size:.75rem;text-align:center;">${comments.length-3} more note(s)...</div>`:""}
+      </div>`:""}
+    ${uploads.length>0?`
+      <div style="margin-bottom:14px;">
+        <div class="section-title" style="margin-top:0;">Files (${uploads.length})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${uploads.slice(0,4).map(u=>u.type?.startsWith("image")?
+            `<img src="${u.url}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1px solid rgba(0,229,255,.2);cursor:pointer;" onclick="openLightbox('${u.url}')">`:
+            `<div style="background:var(--card);border-radius:8px;padding:7px 10px;font-size:.75rem;color:var(--soft);">📄 ${u.name}</div>`
+          ).join("")}
+          ${uploads.length>4?`<div style="color:var(--muted);font-size:.75rem;display:flex;align-items:center;">+${uploads.length-4} more</div>`:""}
+        </div>
+      </div>`:""}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid rgba(0,229,255,.08);">
+      ${(t.type==="pool"&&t.status==="pending"&&!(t.claims||[]).find(c=>!c.completedAt))?`<button class="btn btn-green btn-sm" onclick="claimPool('${t.id}');closeModal('detail-modal');">⚡ Claim & Start</button>`:""}
+      ${(t.type==="pool"&&(t.claims||[]).find(c=>c.uid===cu.id&&!c.completedAt))?`<button class="btn btn-green btn-sm" onclick="completePool('${t.id}');closeModal('detail-modal');">✅ Mark Complete</button>`:""}
+      ${(t.type==="assigned"&&(t.acceptedBy||[]).find(a=>a.uid===cu.id)&&!(t.completedBy||[]).find(c=>c.uid===cu.id))?`<button class="btn btn-green btn-sm" onclick="completeTask('${t.id}');closeModal('detail-modal');">✅ Mark Complete</button>`:""}
+      <button class="btn btn-ghost btn-sm" onclick="openSubtaskModal('${t.id}');closeModal('detail-modal');">📋 Steps</button>
+      <button class="btn btn-ghost btn-sm" onclick="openCommentsModal('${t.id}');closeModal('detail-modal');">💬 Notes</button>
+      <button class="btn btn-ghost btn-sm" onclick="shareTask('${t.id}')">🔗 Share</button>
+    </div>`;
+
   $("detail-modal").classList.add("open");
 };
 
-window.cancelAccept = async (taskId) => {
-  const t=(window._tasks||[]).find(x=>x.id===taskId);
-  if(!t) return;
-  await updateDoc(doc(db,"tasks",taskId),{status:"pending",acceptedBy:null,acceptedAt:null});
-  toast("Acceptance cancelled","info");
-  closeModal("detail-modal");
+// ── CANCEL ACCEPT (assigned) ─────────────────────
+window.cancelAccept = async id => {
+  const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
+  if(!confirm(`Cancel this task and put it back to pending?\n\n"${t.title}"\n\nYour start time will be removed.`)) return;
+  const newAccepted=(t.acceptedBy||[]).filter(a=>a.uid!==cu.id);
+  await updateDoc(doc(db,"tasks",id),{
+    acceptedBy: newAccepted,
+    status: newAccepted.length===0 ? "pending" : "accepted"
+  });
+  await logAct(`${cu.name} cancelled acceptance of: "${t.title}"`, "edit", id);
+  await notifyAdmins(`${cu.name} cancelled task: "${t.title}" — returned to pending`, "edit", id);
+  toast("Task cancelled — returned to pending ↩","info");
 };
 
-window.cancelClaim = async (taskId) => {
-  const t=(window._tasks||[]).find(x=>x.id===taskId);
-  if(!t) return;
-  await updateDoc(doc(db,"tasks",taskId),{status:"pending",claimedBy:null,claimedAt:null});
-  toast("Claim cancelled","info");
-  closeModal("detail-modal");
+// ── CANCEL CLAIM (pool) ───────────────────────────
+window.cancelClaim = async id => {
+  const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
+  if(!confirm(`Cancel this task and put it back in the Open Pool?\n\n"${t.title}"\n\nYour claim will be removed.`)) return;
+  const newClaims=(t.claims||[]).filter(c=>c.uid!==cu.id);
+  await updateDoc(doc(db,"tasks",id),{
+    claims: newClaims,
+    status: newClaims.length===0 ? "pending" : newClaims.some(c=>!c.completedAt) ? "accepted" : "completed"
+  });
+  await logAct(`${cu.name} cancelled claim on: "${t.title}"`, "edit", id);
+  await notifyAdmins(`${cu.name} released pool task: "${t.title}" — back in pool`, "edit", id);
+  toast("Claim cancelled — task returned to Open Pool ↩","info");
 };
 
-window.cancelPrivateStart = async (taskId) => {
-  const t=(window._tasks||[]).find(x=>x.id===taskId);
-  if(!t) return;
-  await updateDoc(doc(db,"tasks",taskId),{status:"pending",startedBy:null,startedAt:null});
-  toast("Start cancelled","info");
-  closeModal("detail-modal");
+// ── CANCEL PRIVATE START ──────────────────────────
+window.cancelPrivateStart = async id => {
+  const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
+  if(!confirm(`Cancel this task and return it to pending?\n\n"${t.title}"`)) return;
+  const newAccepted=(t.privateAcceptedBy||[]).filter(a=>a.uid!==cu.id);
+  await updateDoc(doc(db,"tasks",id),{
+    privateAcceptedBy: newAccepted,
+    status: newAccepted.length===0 ? "pending" : "accepted"
+  });
+  await logAct(`${cu.name} cancelled private task: "${t.title}"`, "edit", id);
+  toast("Private task returned to pending ↩","info");
 };
 
-window.openConfirmComplete = (taskId) => {
-  const t=(window._tasks||[]).find(x=>x.id===taskId);
-  if(!t || t.status==="completed") return;
-  $("complete-task-id").value=taskId;
-  $("complete-note").value="";
-  $("confirm-complete-modal").classList.add("open");
+// ── CONFIRM COMPLETE ──────────────────────────────
+let _confirmCallback = null;
+window.openConfirmComplete = (id, title, callback) => {
+  _confirmCallback = callback;
+  $("confirm-task-title").textContent = title;
+  $("confirm-modal").classList.add("open");
 };
-
 window.confirmComplete = async () => {
-  const taskId=$("complete-task-id").value;
-  const note=$("complete-note").value.trim();
-  const t=(window._tasks||[]).find(x=>x.id===taskId);
-  if(!t) return;
-  
-  await updateDoc(doc(db,"tasks",taskId),{
-    status:"completed",
-    completedBy:cu.name,
-    completedAt:serverTimestamp(),
-    completionNote:note
-  });
-  toast("Task marked complete ✓","success");
-  closeModal("confirm-complete-modal");
-  renderPage(currentPage);
+  closeModal("confirm-modal");
+  if(_confirmCallback) await _confirmCallback();
+  _confirmCallback = null;
 };
 
-window.undoComplete = async (taskId) => {
-  const t=(window._tasks||[]).find(x=>x.id===taskId);
-  if(!t) return;
-  await updateDoc(doc(db,"tasks",taskId),{
-    status:"pending",
-    completedBy:null,
-    completedAt:null,
-    completionNote:""
-  });
-  toast("Completion undone","info");
-  renderPage(currentPage);
+// ── UNDO COMPLETE ─────────────────────────────────
+window.undoComplete = async (id) => {
+  if(!confirm("Undo completion? This will move the task back to In Progress.")) return;
+  const t=(window._tasks||[]).find(x=>x.id===id); if(!t) return;
+  if(t.type==="assigned"){
+    const newCompleted=(t.completedBy||[]).filter(c=>c.uid!==cu.id);
+    await updateDoc(doc(db,"tasks",id),{
+      completedBy: newCompleted,
+      status: newCompleted.length===0?"accepted":"completed"
+    });
+  } else if(t.type==="pool"){
+    const newClaims=(t.claims||[]).map(c=>c.uid===cu.id?{...c,completedAt:null}:c);
+    await updateDoc(doc(db,"tasks",id),{claims:newClaims,status:"accepted"});
+  } else if(t.type==="private"){
+    const newCompleted=(t.privateCompletedBy||[]).filter(c=>c.uid!==cu.id);
+    await updateDoc(doc(db,"tasks",id),{
+      privateCompletedBy: newCompleted,
+      status: newCompleted.length===0?"accepted":"completed",
+      completedAt: newCompleted.length===0?null:t.completedAt
+    });
+  }
+  await logAct(`${cu.name} undid completion of: "${t.title}"`, "edit", id);
+  toast("Completion undone — task moved back to In Progress ↩","info");
 };
 
-// ── MOBILE NAVIGATION ────────────────────────────
+// Mobile nav
 window.toggleMobileNav = () => {
-  const nav=$("mobile-nav");
-  if(nav) nav.classList.toggle("open");
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('mobile-overlay');
+  sidebar.classList.toggle('mobile-open');
+  overlay.classList.toggle('open');
 };
-
 window.closeMobileNav = () => {
-  const nav=$("mobile-nav");
-  if(nav) nav.classList.remove("open");
+  document.querySelector('.sidebar').classList.remove('mobile-open');
+  document.getElementById('mobile-overlay').classList.remove('open');
 };
 
-// ── MODAL CLOSING ────────────────────────────────
-window.closeModal = (modalId) => {
-  const m=document.getElementById(modalId);
-  if(m) m.classList.remove("open");
-  editingTaskId=null;
-};
-
-// ── DOM READY & EVENT LISTENERS ──────────────────
-document.addEventListener("DOMContentLoaded", async () => {
-  logDiag("DOM ready, initializing app");
-  
-  onAuthStateChanged(auth, u => {
-    if(!u) return window.location.href="?login";
-    cu={id:u.uid,name:u.displayName||"User",email:u.email,role:"worker"};
-    
-    getDoc(doc(db,"admins",u.uid)).then(snap=>{
-      if(snap.exists()) cu.role="admin";
-      logDiag(`User ${u.email} loaded with role: ${cu.role}`);
-      renderPage("dashboard");
-    });
-  });
-  
-  // Task form
-  $("task-form")?.addEventListener("submit",e=>{e.preventDefault();saveTask();});
-  
-  // Priority filter
-  document.querySelectorAll("[data-priority]").forEach(btn=>{
-    btn.addEventListener("click",()=>{
-      priorityFilter=btn.dataset.priority;
-      renderPage("dashboard");
-    });
-  });
-  
-  // Close modals on outside click
-  document.querySelectorAll(".modal").forEach(m=>{
-    m.addEventListener("click",e=>{
-      if(e.target===m) closeModal(m.id);
-    });
-  });
-  
-  // Mobile nav
-  document.addEventListener("click",e=>{
-    if(!e.target.closest("nav") && !e.target.closest("[data-menu-btn]")){
-      closeMobileNav();
-    }
+// Close mobile nav when a nav item is clicked
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    if (window.innerWidth <= 700) closeMobileNav();
   });
 });
+document.addEventListener("click",e=>{
+  if(!e.target.closest("#notif-panel")&&!e.target.closest("#notif-btn")) closeNotifPanel();
+});
+document.querySelectorAll(".modal-overlay").forEach(el=>
+  el.addEventListener("click",e=>{if(e.target===el) el.classList.remove("open");}));
 </script>
+
+<style>
+:root{--bg:#040507;--surface:#08090d;--card:#0d0f16;--border:rgba(0,229,255,.1);--cyan:#00e5ff;--gold:#ffc107;--green:#00ffb3;--purple:#b388ff;--red:#ff4b6e;--text:#d8f0f4;--muted:#3a5a62;--soft:#6a9aa4;--accent:#00e5ff;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+h1,h2,h3,h4{font-family:'Orbitron',sans-serif;}
+#auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 25% 45%,#001e26 0%,#040507 65%);}
+.auth-box{background:var(--surface);border:1px solid var(--cyan);border-radius:20px;padding:44px 40px;width:400px;max-width:95vw;box-shadow:0 0 80px rgba(0,229,255,.08),0 40px 80px rgba(0,0,0,.8);}
+.auth-logo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:1.1rem;color:var(--cyan);letter-spacing:2px;text-shadow:0 0 20px rgba(0,229,255,.6);margin-bottom:6px;}
+.auth-sub{color:var(--muted);font-size:.82rem;margin-bottom:28px;}
+.auth-tabs{display:flex;gap:4px;background:var(--card);border-radius:10px;padding:4px;margin-bottom:24px;}
+.auth-tab{flex:1;text-align:center;padding:8px;border-radius:8px;cursor:pointer;font-family:'Orbitron',sans-serif;font-size:.7rem;font-weight:700;color:var(--muted);transition:all .2s;letter-spacing:1px;border:none;background:none;}
+.auth-tab.active{background:var(--cyan);color:#000;}
+label{display:block;font-size:.68rem;color:var(--soft);margin-bottom:5px;text-transform:uppercase;letter-spacing:.08em;font-family:'Orbitron',sans-serif;}
+input[type=text],input[type=email],input[type=password],textarea,select{width:100%;background:var(--card);border:1px solid rgba(0,229,255,.15);border-radius:10px;padding:11px 14px;color:var(--text);font-family:'Inter',sans-serif;font-size:.9rem;transition:all .2s;outline:none;margin-bottom:14px;}
+input:focus,textarea:focus,select:focus{border-color:var(--cyan);box-shadow:0 0 14px rgba(0,229,255,.15);}
+select option{background:#0d0f16;}
+.auth-error{color:var(--red);font-size:.82rem;margin-bottom:12px;display:none;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 20px;border-radius:10px;border:none;cursor:pointer;font-family:'Orbitron',sans-serif;font-weight:700;font-size:.68rem;transition:all .2s;letter-spacing:.8px;}
+.btn-primary{background:var(--cyan);color:#000;width:100%;box-shadow:0 0 24px rgba(0,229,255,.3);}
+.btn-primary:hover{background:#33ecff;transform:translateY(-1px);}
+.btn-sm{padding:6px 12px;font-size:.62rem;width:auto;}
+.btn-ghost{background:transparent;color:var(--soft);border:1px solid rgba(0,229,255,.2);}
+.btn-ghost:hover{background:rgba(0,229,255,.06);color:var(--cyan);border-color:var(--cyan);}
+.btn-green{background:var(--green);color:#001a10;box-shadow:0 0 14px rgba(0,255,179,.25);}
+.btn-green:hover{filter:brightness(1.1);}
+.btn-gold{background:var(--gold);color:#1a1000;box-shadow:0 0 14px rgba(255,193,7,.25);}
+.btn-gold:hover{filter:brightness(1.1);}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-purple{background:var(--purple);color:#0d0018;}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+#app-screen{display:none;min-height:100vh;flex-direction:column;}
+.topbar{background:var(--surface);border-bottom:1px solid var(--cyan);padding:0 24px;height:62px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 1px 30px rgba(0,229,255,.08);}
+.logo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:.95rem;color:var(--cyan);letter-spacing:2px;text-shadow:0 0 16px rgba(0,229,255,.5);}
+.topbar-left,.topbar-right{display:flex;align-items:center;gap:10px;}
+.role-badge{font-size:.62rem;padding:3px 10px;border-radius:20px;font-weight:700;font-family:'Orbitron',sans-serif;text-transform:uppercase;letter-spacing:.08em;}
+.badge-admin{background:rgba(0,229,255,.1);color:var(--cyan);border:1px solid rgba(0,229,255,.35);}
+.badge-member{background:rgba(255,193,7,.1);color:var(--gold);border:1px solid rgba(255,193,7,.35);}
+.notif-btn{position:relative;background:transparent;border:1px solid rgba(0,229,255,.2);border-radius:9px;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;font-size:1rem;}
+.notif-btn:hover{border-color:var(--cyan);box-shadow:0 0 14px rgba(0,229,255,.2);}
+.notif-dot{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:var(--red);display:none;border:2px solid var(--surface);}
+.user-chip{background:transparent;border:1px solid rgba(0,229,255,.15);border-radius:9px;padding:6px 12px;font-size:.82rem;display:flex;align-items:center;gap:8px;}
+.avatar{width:26px;height:26px;border-radius:50%;background:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:900;color:#000;font-family:'Orbitron',sans-serif;}
+.mini-avatar{width:22px;height:22px;border-radius:50%;background:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:900;color:#000;font-family:'Orbitron',sans-serif;}
+.main-wrap{display:flex;flex:1;}
+.sidebar{width:230px;background:var(--surface);border-right:1px solid rgba(0,229,255,.08);padding:16px 12px;display:flex;flex-direction:column;gap:3px;min-height:calc(100vh - 62px);}
+.nav-section{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;padding:14px 12px 4px;font-family:'Orbitron',sans-serif;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:.78rem;color:var(--muted);border:none;background:none;width:100%;text-align:left;font-family:'Inter',sans-serif;border-left:2px solid transparent;}
+.nav-item:hover{background:rgba(0,229,255,.05);color:var(--cyan);}
+.nav-item.active{background:rgba(0,229,255,.08);color:var(--cyan);border-left-color:var(--cyan);}
+.nav-icon{font-size:1rem;width:20px;text-align:center;}
+.nav-count{margin-left:auto;background:var(--gold);color:#000;border-radius:20px;padding:1px 7px;font-size:.6rem;font-weight:900;font-family:'Orbitron',sans-serif;}
+.nav-count.cyan{background:var(--cyan);}
+.content{flex:1;padding:28px;overflow-y:auto;}
+.page{display:none;}.page.active{display:block;}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:10px;}
+.page-title{font-size:1.3rem;font-weight:900;letter-spacing:1px;color:var(--cyan);}
+.page-sub{color:var(--muted);font-size:.8rem;margin-top:4px;font-family:'Inter',sans-serif;}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
+.stat-card{background:var(--surface);border:1px solid rgba(0,229,255,.1);border-radius:14px;padding:20px;position:relative;overflow:hidden;}
+.stat-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;}
+.stat-card.cyan::before{background:var(--cyan);box-shadow:0 0 12px var(--cyan);}
+.stat-card.gold::before{background:var(--gold);box-shadow:0 0 12px var(--gold);}
+.stat-card.blue::before{background:#4488ff;box-shadow:0 0 12px #4488ff;}
+.stat-card.green::before{background:var(--green);box-shadow:0 0 12px var(--green);}
+.stat-num{font-family:'Orbitron',sans-serif;font-size:2.2rem;font-weight:900;color:var(--cyan);}
+.stat-card.gold .stat-num{color:var(--gold);}
+.stat-card.blue .stat-num{color:#4488ff;}
+.stat-card.green .stat-num{color:var(--green);}
+.stat-label{color:var(--muted);font-size:.7rem;margin-top:4px;text-transform:uppercase;letter-spacing:.06em;font-family:'Orbitron',sans-serif;}
+.tasks-grid{display:flex;flex-direction:column;gap:10px;}
+.task-card{background:var(--surface);border:1px solid rgba(0,229,255,.1);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:14px;transition:all .2s;}
+.task-card:hover{border-color:var(--cyan);box-shadow:0 0 20px rgba(0,229,255,.07);transform:translateX(2px);}
+.task-priority{width:3px;height:36px;border-radius:4px;flex-shrink:0;}
+.pri-high{background:var(--red);box-shadow:0 0 8px var(--red);}
+.pri-medium{background:var(--gold);box-shadow:0 0 8px var(--gold);}
+.pri-low{background:var(--green);box-shadow:0 0 8px var(--green);}
+.task-body{flex:1;min-width:0;}
+.task-title{font-weight:500;font-size:.92rem;margin-bottom:5px;}
+.task-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.tag{font-size:.66rem;padding:2px 9px;border-radius:20px;font-family:'Orbitron',sans-serif;font-weight:600;}
+.tag-cyan{background:rgba(0,229,255,.1);color:var(--cyan);border:1px solid rgba(0,229,255,.2);}
+.tag-gold{background:rgba(255,193,7,.1);color:var(--gold);border:1px solid rgba(255,193,7,.2);}
+.tag-green{background:rgba(0,255,179,.1);color:var(--green);border:1px solid rgba(0,255,179,.2);}
+.tag-purple{background:rgba(179,136,255,.1);color:var(--purple);border:1px solid rgba(179,136,255,.2);}
+.tag-gray{background:rgba(58,90,98,.3);color:var(--soft);}
+.tag-soft{background:rgba(106,154,164,.1);color:var(--soft);}
+.pri-tag-high{background:rgba(255,75,110,.1);color:var(--red);border:1px solid rgba(255,75,110,.2);font-size:.66rem;padding:2px 9px;border-radius:20px;font-family:'Orbitron',sans-serif;font-weight:600;}
+.pri-tag-medium{background:rgba(255,193,7,.1);color:var(--gold);border:1px solid rgba(255,193,7,.2);font-size:.66rem;padding:2px 9px;border-radius:20px;font-family:'Orbitron',sans-serif;font-weight:600;}
+.pri-tag-low{background:rgba(0,255,179,.1);color:var(--green);border:1px solid rgba(0,255,179,.2);font-size:.66rem;padding:2px 9px;border-radius:20px;font-family:'Orbitron',sans-serif;font-weight:600;}
+.task-date{color:var(--muted);font-size:.74rem;}
+.task-actions{display:flex;gap:7px;flex-shrink:0;flex-wrap:wrap;}
+.task-accept-card{background:var(--surface);border:1px solid rgba(0,229,255,.1);border-radius:14px;padding:20px;margin-bottom:10px;transition:all .2s;}
+.task-accept-card:hover{border-color:rgba(0,229,255,.3);}
+.task-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;}
+.task-desc{color:var(--muted);font-size:.83rem;line-height:1.55;margin-top:4px;}
+.opacity-done{opacity:.6;}
+.time-stamp{font-size:.75rem;color:var(--soft);margin-top:5px;font-family:'Inter',sans-serif;}
+.time-stamp.done{color:var(--green);}
+/* MEDIA */
+.media-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(0,229,255,.08);}
+.media-item{display:flex;flex-direction:column;gap:4px;max-width:160px;}
+.media-thumb{width:150px;height:110px;object-fit:cover;border-radius:10px;cursor:pointer;border:1px solid rgba(0,229,255,.2);transition:all .2s;}
+.media-thumb:hover{border-color:var(--cyan);box-shadow:0 0 14px rgba(0,229,255,.2);}
+.media-video{width:200px;border-radius:10px;border:1px solid rgba(0,229,255,.2);}
+.media-doc{background:var(--card);border:1px solid rgba(0,229,255,.15);border-radius:10px;padding:12px 14px;}
+.doc-link{color:var(--cyan);font-size:.84rem;text-decoration:none;font-family:'Inter',sans-serif;}
+.doc-link:hover{text-decoration:underline;}
+.media-meta{font-size:.68rem;color:var(--muted);font-family:'Inter',sans-serif;}
+.media-item-top{position:relative;display:flex;align-items:flex-start;}
+.del-file-btn{position:absolute;top:4px;right:4px;background:rgba(255,75,110,.85);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:.75rem;padding:3px 6px;line-height:1;transition:all .2s;}
+.del-file-btn:hover{background:var(--red);transform:scale(1.1);}
+/* UPLOAD MODAL */
+.upload-zone{border:2px dashed rgba(0,229,255,.3);border-radius:14px;padding:32px 20px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px;}
+.upload-zone:hover{border-color:var(--cyan);background:rgba(0,229,255,.03);}
+.upload-zone input{display:none;}
+.upload-zone-text{color:var(--muted);font-size:.88rem;margin-top:8px;}
+.upload-types{font-size:.75rem;color:var(--muted);margin-top:4px;}
+.upload-progress{background:var(--card);border-radius:10px;padding:14px;margin-bottom:14px;}
+.upload-bar-wrap{background:rgba(0,229,255,.1);border-radius:20px;height:8px;overflow:hidden;margin:8px 0;}
+.upload-bar{background:var(--cyan);height:100%;border-radius:20px;transition:width .3s;width:0;}
+.prev-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--card);border-radius:8px;font-size:.82rem;margin-bottom:6px;}
+.prev-thumb{width:40px;height:40px;object-fit:cover;border-radius:6px;}
+/* FILTER */
+.filter-bar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:18px;}
+.filter-btn{padding:5px 14px;border-radius:20px;border:1px solid rgba(0,229,255,.15);background:var(--card);color:var(--soft);cursor:pointer;font-size:.66rem;font-family:'Orbitron',sans-serif;font-weight:700;transition:all .2s;}
+.filter-btn.active{background:var(--cyan);border-color:var(--cyan);color:#000;}
+.filter-btn:hover:not(.active){border-color:var(--cyan);color:var(--cyan);}
+.table-wrap{background:var(--surface);border:1px solid rgba(0,229,255,.1);border-radius:14px;overflow:hidden;}
+.table{width:100%;border-collapse:collapse;}
+.table th{text-align:left;padding:12px 16px;font-size:.62rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid rgba(0,229,255,.1);font-family:'Orbitron',sans-serif;}
+.table td{padding:14px 16px;border-bottom:1px solid rgba(0,229,255,.05);font-size:.86rem;}
+.table tr:last-child td{border-bottom:none;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:100;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--cyan);border-radius:20px;padding:32px;width:540px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 0 80px rgba(0,229,255,.1),0 40px 80px rgba(0,0,0,.8);}
+.modal h3{font-size:.9rem;margin-bottom:22px;color:var(--cyan);letter-spacing:2px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:8px;}
+.assign-label{display:flex;align-items:center;gap:8px;background:var(--card);padding:7px 12px;border-radius:9px;cursor:pointer;font-size:.82rem;border:1px solid rgba(0,229,255,.12);transition:all .2s;}
+.assign-label:hover{border-color:var(--cyan);}
+.assign-label input{width:auto;margin:0;}
+#assign-boxes,#share-boxes{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.field-section{background:rgba(0,229,255,.03);border:1px solid rgba(0,229,255,.08);border-radius:12px;padding:14px;margin-bottom:14px;}
+.field-section-title{font-family:'Orbitron',sans-serif;font-size:.65rem;color:var(--soft);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;}
+.notif-panel{position:fixed;top:62px;right:16px;width:380px;background:var(--surface);border:1px solid var(--cyan);border-radius:16px;padding:20px;z-index:80;box-shadow:0 0 50px rgba(0,229,255,.1),0 20px 60px rgba(0,0,0,.7);display:none;max-height:520px;overflow-y:auto;}
+.notif-panel.open{display:block;}
+.notif-panel h4{font-size:.72rem;margin-bottom:14px;color:var(--cyan);letter-spacing:2px;display:flex;justify-content:space-between;align-items:center;}
+.notif-item{padding:11px 13px;background:var(--card);border-radius:10px;margin-bottom:7px;font-size:.82rem;border-left:3px solid var(--cyan);}
+.notif-item.type-complete{border-left-color:var(--green);}
+.notif-item.type-accept{border-left-color:var(--gold);}
+.notif-item.type-upload{border-left-color:var(--purple);}
+.notif-item.type-approval{border-left-color:var(--gold);}
+.notif-item.type-comment{border-left-color:var(--purple);}
+.notif-time{color:var(--muted);font-size:.72rem;margin-top:4px;}
+.section-title{font-family:'Orbitron',sans-serif;font-size:.62rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:22px 0 10px;}
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+.empty-icon{font-size:2.8rem;margin-bottom:12px;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface);border:1px solid var(--cyan);color:var(--text);border-radius:10px;padding:11px 22px;font-size:.85rem;box-shadow:0 0 30px rgba(0,229,255,.15);z-index:200;transition:transform .3s ease;white-space:nowrap;font-family:'Inter',sans-serif;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.toast-success{border-color:var(--green);}
+.toast.toast-error{border-color:var(--red);}
+/* PRIORITY FILTER */
+.pri-filter-panel{width:160px;background:var(--surface);border-left:1px solid rgba(0,229,255,.08);padding:20px 12px;display:flex;flex-direction:column;gap:8px;min-height:calc(100vh - 62px);}
+.pri-filter-title{font-family:'Orbitron',sans-serif;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;padding:8px 12px 4px;}
+.pri-filter-btn{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;cursor:pointer;transition:all .2s;font-size:.78rem;color:var(--muted);border:none;background:none;width:100%;text-align:left;font-family:'Inter',sans-serif;}
+.pri-filter-btn:hover{background:rgba(0,229,255,.05);color:var(--text);}
+.pri-filter-btn.active{background:rgba(0,229,255,.08);color:var(--cyan);}
+.pri-filter-btn.active.high{background:rgba(255,75,110,.1);color:var(--red);}
+.pri-filter-btn.active.medium{background:rgba(255,193,7,.1);color:var(--gold);}
+.pri-filter-btn.active.low{background:rgba(0,255,179,.1);color:var(--green);}
+@media(max-width:900px){.pri-filter-panel{display:none;}}
+/* REPORT MODAL */
+.clickable-stat{cursor:pointer;transition:all .2s;}
+.clickable-stat:hover{transform:translateY(-2px);box-shadow:0 0 20px rgba(0,229,255,.12);}
+.stat-card.cyan.clickable-stat:hover{border-color:var(--cyan);box-shadow:0 0 20px rgba(0,229,255,.2);}
+.stat-card.gold.clickable-stat:hover{border-color:var(--gold);box-shadow:0 0 20px rgba(255,193,7,.2);}
+.stat-card.blue.clickable-stat:hover{border-color:#4488ff;box-shadow:0 0 20px rgba(68,136,255,.2);}
+.stat-card.green.clickable-stat:hover{border-color:var(--green);box-shadow:0 0 20px rgba(0,255,179,.2);}
+.report-card{background:var(--card);border:1px solid rgba(0,229,255,.1);border-radius:14px;padding:16px 18px;margin-bottom:12px;}
+.report-card-header{margin-bottom:10px;}
+.report-title{font-weight:600;font-size:.95rem;margin-bottom:4px;}
+.report-entry{background:rgba(0,229,255,.04);border-radius:10px;padding:10px 12px;margin-top:8px;border-left:3px solid var(--green);}
+.report-who{display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:.88rem;}
+.report-time{font-size:.76rem;color:var(--soft);margin-top:3px;font-family:'Inter',sans-serif;}
+/* SUBTASKS & COMMENTS */
+.subtask-item{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--card);border-radius:9px;margin-bottom:6px;border:1px solid rgba(0,229,255,.08);transition:all .2s;}
+.subtask-item:hover{border-color:rgba(0,229,255,.2);}
+.subtask-done{opacity:.6;}
+.subtask-done .subtask-text{text-decoration:line-through;color:var(--muted);}
+.subtask-text{font-size:.85rem;flex:1;}
+.comment-item{background:var(--card);border:1px solid rgba(0,229,255,.08);border-radius:12px;padding:12px 14px;margin-bottom:8px;}
+.comment-item.comment-mine{border-color:rgba(0,229,255,.2);background:rgba(0,229,255,.04);}
+.comment-header{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.comment-text{font-size:.85rem;color:var(--text);line-height:1.55;padding-left:30px;}
+.action-btns-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,229,255,.06);}
+.followup-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(179,136,255,.12);color:var(--purple);border:1px solid rgba(179,136,255,.25);border-radius:20px;font-size:.66rem;padding:2px 9px;font-family:'Orbitron',sans-serif;font-weight:600;}
+.subtask-progress-inline{display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--soft);}
+/* LATEST INTEL */
+.intel-card{background:var(--surface);border:1px solid rgba(0,229,255,.15);border-radius:14px;padding:16px 18px;margin-bottom:10px;transition:all .2s;}
+.intel-card:hover{border-color:rgba(0,229,255,.3);box-shadow:0 0 16px rgba(0,229,255,.06);}
+.intel-card-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;}
+.intel-title{font-weight:600;font-size:.95rem;margin-bottom:4px;color:var(--text);}
+.intel-note{font-size:.83rem;color:var(--soft);line-height:1.55;margin-top:4px;}
+.intel-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;}
+.intel-media{margin-top:8px;}
+.intel-img{max-width:100%;max-height:240px;border-radius:10px;border:1px solid rgba(0,229,255,.2);cursor:pointer;transition:all .2s;object-fit:cover;}
+.intel-img:hover{border-color:var(--cyan);box-shadow:0 0 14px rgba(0,229,255,.2);}
+.intel-video{max-width:100%;border-radius:10px;border:1px solid rgba(0,229,255,.2);}
+.intel-doc-link{display:inline-flex;align-items:center;gap:8px;background:var(--card);border:1px solid rgba(0,229,255,.15);border-radius:10px;padding:10px 14px;color:var(--cyan);font-size:.84rem;text-decoration:none;transition:all .2s;}
+.intel-doc-link:hover{border-color:var(--cyan);background:rgba(0,229,255,.06);}
+/* LIGHTBOX */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:300;display:none;align-items:center;justify-content:center;}
+.lightbox.open{display:flex;}
+.lightbox img{max-width:90vw;max-height:90vh;border-radius:12px;border:1px solid rgba(0,229,255,.3);}
+.lightbox-close{position:absolute;top:20px;right:24px;color:var(--cyan);font-size:2rem;cursor:pointer;font-family:'Orbitron',sans-serif;}
+@media(max-width:700px){
+  .stats-row{grid-template-columns:1fr 1fr;}
+  .sidebar{display:none;}
+  .sidebar.mobile-open{display:flex;position:fixed;top:62px;left:0;bottom:0;z-index:90;width:240px;overflow-y:auto;box-shadow:4px 0 30px rgba(0,0,0,.8);}
+  .mobile-overlay{display:none;position:fixed;inset:0;top:62px;background:rgba(0,0,0,.7);z-index:89;}
+  .mobile-overlay.open{display:block;}
+  .form-row{grid-template-columns:1fr;}
+  .content{padding:16px;}
+  .topbar{padding:0 14px;}
+  .logo{font-size:.75rem;}
+  .user-chip span{display:none;}
+  .notif-panel{width:calc(100vw - 32px);right:16px;}
+  .hamburger{display:flex !important;}
+}
+.hamburger{display:none;background:transparent;border:1px solid rgba(0,229,255,.2);border-radius:9px;width:38px;height:38px;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem;color:var(--cyan);transition:all .2s;}
+.hamburger:hover{border-color:var(--cyan);box-shadow:0 0 14px rgba(0,229,255,.2);}
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">ATUBRE TASK FLOW</div>
+    <div class="auth-sub">Powering the team — log in to continue</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Log In</button>
+      <button class="auth-tab" onclick="switchAuthTab('register')">Register</button>
+    </div>
+    <div id="auth-error" class="auth-error"></div>
+    <div id="login-form">
+      <label>Email</label><input type="email" id="login-email" placeholder="you@example.com">
+      <label>Password</label><input type="password" id="login-password" placeholder="••••••••">
+      <button class="btn btn-primary" onclick="handleLogin()" id="login-btn">Log In</button>
+    </div>
+    <div id="register-form" style="display:none">
+      <label>Full Name</label><input type="text" id="reg-name" placeholder="Your name">
+      <label>Email</label><input type="email" id="reg-email" placeholder="you@example.com">
+      <label>Password</label><input type="password" id="reg-password" placeholder="Min 6 characters">
+      <label>Role</label>
+      <select id="reg-role"><option value="member">Team Member</option><option value="admin">Admin / Manager</option></select>
+      <label>Admin Invite Code (Admin only)</label>
+      <input type="password" id="reg-admin-code" placeholder="Leave blank if Member">
+      <button class="btn btn-primary" onclick="handleRegister()" id="register-btn">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- PENDING APPROVAL SCREEN -->
+<div id="pending-screen" style="display:none;min-height:100vh;align-items:center;justify-content:center;background:radial-gradient(ellipse at 25% 45%,#001e26 0%,#040507 65%);">
+  <div style="background:var(--surface);border:1px solid var(--gold);border-radius:20px;padding:44px 40px;width:400px;max-width:95vw;text-align:center;box-shadow:0 0 80px rgba(255,193,7,.08);">
+    <div style="font-size:3rem;margin-bottom:16px;">⏳</div>
+    <div style="font-family:'Orbitron',sans-serif;font-weight:900;font-size:1rem;color:var(--gold);letter-spacing:2px;margin-bottom:12px;">APPROVAL PENDING</div>
+    <div style="color:var(--muted);font-size:.88rem;line-height:1.6;margin-bottom:24px;">
+      Your registration has been submitted.<br>An admin will review and approve your account shortly.<br><br>
+      You will be able to log in once approved.
+    </div>
+    <button class="btn btn-ghost btn-sm" style="width:100%;" onclick="handleLogout();document.getElementById('pending-screen').style.display='none';document.getElementById('auth-screen').style.display='flex';">Back to Login</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="hamburger" onclick="toggleMobileNav()" id="hamburger-btn">☰</button>
+      <div class="logo">ATUBRE TASK FLOW</div>
+      <span class="role-badge" id="role-badge"></span>
+    </div>
+    <div class="topbar-right">
+      <div class="notif-btn" onclick="toggleNotifPanel()" id="notif-btn">🔔<div class="notif-dot" id="notif-dot"></div></div>
+      <div class="user-chip"><div class="avatar" id="user-avatar"></div><span id="user-name-display"></span></div>
+      <button class="btn btn-ghost btn-sm" onclick="handleLogout()">Log Out</button>
+    </div>
+  </div>
+
+  <div class="mobile-overlay" id="mobile-overlay" onclick="closeMobileNav()"></div>
+
+  <div class="notif-panel" id="notif-panel">
+    <h4>NOTIFICATIONS <span onclick="clearNotifications()" style="font-size:.68rem;color:var(--muted);cursor:pointer;font-weight:400;font-family:'Inter',sans-serif;">Clear all</span></h4>
+    <div id="notif-list"></div>
+  </div>
+
+  <div class="main-wrap">
+    <div class="sidebar">
+      <div class="nav-section">Overview</div>
+      <button class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard"><span class="nav-icon">⚡</span>Dashboard</button>
+      <div class="nav-section">Tasks</div>
+      <button class="nav-item member-only" onclick="showPage('my-tasks')" id="nav-my-tasks">
+        <span class="nav-icon">🎯</span>My Tasks
+        <span class="nav-count cyan" id="nav-my-badge" style="display:none"></span>
+      </button>
+      <button class="nav-item" onclick="showPage('in-progress')" id="nav-in-progress">
+        <span class="nav-icon">⚡</span>In Progress
+        <span class="nav-count" id="nav-inprogress-badge" style="display:none;background:var(--cyan);color:#000;"></span>
+      </button>
+      <button class="nav-item" onclick="showPage('pool')" id="nav-pool">
+        <span class="nav-icon">🌊</span>Open Pool
+        <span class="nav-count" id="nav-pool-badge" style="display:none"></span>
+      </button>
+      <button class="nav-item admin-only" onclick="showPage('private')" id="nav-private">
+        <span class="nav-icon">🔒</span>Private
+        <span class="nav-count" id="nav-private-badge" style="display:none;background:var(--purple);color:#000;"></span>
+      </button>
+      <button class="nav-item admin-only" onclick="showPage('all-tasks')" id="nav-all-tasks"><span class="nav-icon">📋</span>All Tasks</button>
+      <button class="nav-item admin-only" onclick="openCreateTask()"><span class="nav-icon">＋</span>New Task</button>
+      <div class="nav-section">Team</div>
+      <button class="nav-item admin-only" onclick="showPage('team')" id="nav-team">
+        <span class="nav-icon">👥</span>Team
+        <span class="nav-count" id="nav-team-badge" style="display:none;background:var(--red);"></span>
+      </button>
+      <button class="nav-item admin-only" onclick="showPage('activity')" id="nav-activity"><span class="nav-icon">🗂</span>Activity Log</button>
+    </div>
+
+    <div class="content">
+
+      <div class="page active" id="page-dashboard">
+        <div class="page-header"><div><div class="page-title" id="dash-greeting">⚡</div><div class="page-sub" id="dash-sub"></div></div></div>
+        <div class="stats-row" id="stats-row"></div>
+        <div class="section-title">Recent Tasks</div>
+        <div id="dash-recent" class="tasks-grid"></div>
+
+        <!-- LATEST INTEL — ADMIN ONLY -->
+        <div id="intel-section" class="admin-only" style="margin-top:28px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div class="section-title" style="margin:0;">🔐 Latest Intel</div>
+            <button class="btn btn-ghost btn-sm admin-only" onclick="openIntelUpload()" style="font-size:.65rem;">＋ Add Intel</button>
+          </div>
+          <div id="intel-list"></div>
+        </div>
+      </div>
+
+      <div class="page" id="page-my-tasks">
+        <div class="page-header"><div><div class="page-title">🎯 My Tasks</div><div class="page-sub">Accept to start · upload proof · mark complete</div></div></div>
+        <div id="my-tasks-list"></div>
+      </div>
+
+      <div class="page" id="page-in-progress">
+        <div class="page-header">
+          <div><div class="page-title">⚡ In Progress</div><div class="page-sub">Tasks you have claimed and are currently working on</div></div>
+        </div>
+        <div id="inprogress-list"></div>
+      </div>
+
+      <div class="page" id="page-pool">
+        <div class="page-header">
+          <div><div class="page-title">🌊 Open Pool</div><div class="page-sub">Available tasks — claim one to start working</div></div>
+          <button class="btn btn-gold btn-sm admin-only" onclick="openCreateTask('pool')">＋ Add Pool Task</button>
+        </div>
+        <div id="pool-list"></div>
+      </div>
+
+      <div class="page" id="page-private">
+        <div class="page-header">
+          <div><div class="page-title">🔒 Private</div><div class="page-sub">Only visible to you and people you share with</div></div>
+          <button class="btn btn-purple btn-sm" onclick="openCreateTask('private')">＋ Add Private Task</button>
+        </div>
+        <div id="private-list"></div>
+      </div>
+
+      <div class="page" id="page-all-tasks">
+        <div class="page-header">
+          <div><div class="page-title">📋 All Tasks</div><div class="page-sub">Full overview with timestamps and uploaded files</div></div>
+          <button class="btn btn-primary btn-sm" onclick="openCreateTask()">＋ New Task</button>
+        </div>
+        <div class="filter-bar">
+          <button class="filter-btn active" onclick="filterAll('all',this)">All</button>
+          <button class="filter-btn" onclick="filterAll('assigned',this)">👤 Assigned</button>
+          <button class="filter-btn" onclick="filterAll('pool',this)">🌊 Pool</button>
+          <button class="filter-btn" onclick="filterAll('private',this)">🔒 Private</button>
+          <button class="filter-btn" onclick="filterAll('pending',this)">Pending</button>
+          <button class="filter-btn" onclick="filterAll('accepted',this)">In Progress</button>
+          <button class="filter-btn" onclick="filterAll('completed',this)">Completed</button>
+        </div>
+        <div id="all-tasks-list"></div>
+      </div>
+
+      <div class="page" id="page-team">
+        <div class="page-header"><div><div class="page-title">👥 Team</div><div class="page-sub">Approve new members · view workload</div></div></div>
+        <div id="team-pending"></div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Open</th><th>Done</th><th>Uploads</th></tr></thead>
+            <tbody id="team-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="page" id="page-activity">
+        <div class="page-header"><div><div class="page-title">🗂 Activity Log</div><div class="page-sub">Every action recorded with date and time</div></div></div>
+        <div id="activity-list" class="tasks-grid"></div>
+      </div>
+
+    </div>
+
+    <!-- PRIORITY FILTER PANEL -->
+    <div class="pri-filter-panel">
+      <div class="pri-filter-title">Priority</div>
+      <button class="pri-filter-btn active" id="pf-all" onclick="setPriorityFilter('all')">
+        <span>⚡</span> All
+      </button>
+      <button class="pri-filter-btn high" id="pf-high" onclick="setPriorityFilter('high')">
+        <span>🔴</span> High
+      </button>
+      <button class="pri-filter-btn medium" id="pf-medium" onclick="setPriorityFilter('medium')">
+        <span>🟡</span> Medium
+      </button>
+      <button class="pri-filter-btn low" id="pf-low" onclick="setPriorityFilter('low')">
+        <span>🟢</span> Low
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- TASK MODAL -->
+<div class="modal-overlay" id="task-modal">
+  <div class="modal">
+    <h3 id="modal-title">NEW TASK</h3>
+    <label>Task Title *</label>
+    <input type="text" id="task-title-input" placeholder="e.g. Install WiFi at new site">
+    <label>Description</label>
+    <textarea id="task-desc-input" rows="3" placeholder="What needs to be done..."></textarea>
+    <label>Task Type</label>
+    <select id="task-type-input" onchange="toggleTypeFields(this.value)">
+      <option value="assigned">👤 Assigned — specific team members</option>
+      <option value="pool">🌊 Open Pool — anyone can claim it</option>
+      <option value="private">🔒 Private — only you and chosen partners</option>
+    </select>
+    <div id="assign-section" class="field-section">
+      <div class="field-section-title">Assign to team members</div>
+      <div id="assign-boxes"></div>
+    </div>
+    <div id="share-section" class="field-section" style="display:none">
+      <div class="field-section-title">Share with (partner / other admins)</div>
+      <div id="share-boxes"></div>
+    </div>
+    <div class="form-row">
+      <div><label>Priority</label>
+        <select id="task-priority-input">
+          <option value="high">🔴 High</option>
+          <option value="medium" selected>🟡 Medium</option>
+          <option value="low">🟢 Low</option>
+        </select>
+      </div>
+      <div><label>Due Date</label><input type="text" id="task-due-input" placeholder="e.g. Apr 30, 2026"></div>
+    </div>
+    <label>Category / Tag</label>
+    <input type="text" id="task-tag-input" placeholder="e.g. WiFi Installation, Finance, Operations">
+
+    <!-- ATTACH FILES — shown for all task types -->
+    <div id="task-attach-section" style="margin-top:4px;">
+      <div class="field-section-title" style="font-family:'Orbitron',sans-serif;font-size:.65rem;color:var(--soft);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;">Attach Files (optional)</div>
+      <input type="file" id="task-attach-input" multiple accept="image/*,video/*,.pdf,.doc,.docx" style="display:none" onchange="previewTaskAttachments()">
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:8px;" onclick="document.getElementById('task-attach-input').click()">
+        📸 Attach Photos / Videos / Documents
+      </button>
+      <div id="task-attach-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;"></div>
+      <div id="task-attach-status" style="font-size:.75rem;color:var(--muted);"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('task-modal')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveTask()" id="save-task-btn">Create Task</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- UPLOAD MODAL -->
+<div class="modal-overlay" id="upload-modal">
+  <div class="modal">
+    <h3>📎 UPLOAD FILES</h3>
+    <input type="file" id="upload-input" multiple accept="image/*,video/*,.pdf,.doc,.docx" style="display:none" onchange="previewFiles()">
+    <div class="upload-zone">
+      <div style="font-size:2.5rem;margin-bottom:10px;">📸🎥📄</div>
+      <button class="btn btn-primary" style="margin-bottom:10px;" onclick="document.getElementById(&#39;upload-input&#39;).click()">
+        📂 Select Photos / Videos / Documents
+      </button>
+      <div class="upload-types">JPG, PNG, GIF, MP4, MOV, PDF, DOC — max 100MB each</div>
+    </div>
+    <div id="upload-preview"></div>
+    <div id="upload-progress" style="display:none" class="upload-progress">
+      <div id="upload-progress-label" style="font-size:.8rem;color:var(--soft);margin-bottom:6px;"></div>
+      <div class="upload-bar-wrap"><div class="upload-bar" id="upload-bar"></div></div>
+      <div id="upload-bar-label" style="font-size:.75rem;color:var(--cyan);text-align:right;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal(&#39;upload-modal&#39;)">Cancel</button>
+      <button class="btn btn-green btn-sm" onclick="handleUpload()" id="upload-btn">⬆ Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUBTASKS MODAL -->
+<div class="modal-overlay" id="subtask-modal">
+  <div class="modal" style="width:520px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <h3 style="margin:0;">📋 TASK STEPS</h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('subtask-modal')">✕ Close</button>
+    </div>
+    <div id="subtask-title-display" style="color:var(--soft);font-size:.82rem;margin-bottom:20px;font-family:'Inter',sans-serif;"></div>
+    <input type="hidden" id="subtask-task-id">
+    <div id="subtask-list"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <input type="text" id="new-subtask-input" placeholder="Add a step e.g. Replace AP cable..." style="margin:0;flex:1;" onkeydown="if(event.key==='Enter')addSubtask()">
+      <button class="btn btn-primary btn-sm" style="flex-shrink:0;" onclick="addSubtask()">＋ Add Step</button>
+    </div>
+  </div>
+</div>
+
+<!-- COMMENTS MODAL -->
+<div class="modal-overlay" id="comments-modal">
+  <div class="modal" style="width:520px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <h3 style="margin:0;">💬 FIELD NOTES</h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('comments-modal')">✕ Close</button>
+    </div>
+    <div id="comments-task-title" style="color:var(--soft);font-size:.82rem;margin-bottom:16px;font-family:'Inter',sans-serif;"></div>
+    <input type="hidden" id="comments-task-id">
+    <div id="comments-list" style="max-height:320px;overflow-y:auto;margin-bottom:14px;"></div>
+    <div style="display:flex;gap:8px;">
+      <textarea id="new-comment-input" rows="2" placeholder="Leave a field note e.g. AP replaced but router still down, needs second visit..." style="margin:0;flex:1;resize:none;" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addComment();}"></textarea>
+      <button class="btn btn-primary btn-sm" style="flex-shrink:0;align-self:flex-end;" onclick="addComment()">Send</button>
+    </div>
+    <div style="color:var(--muted);font-size:.7rem;margin-top:6px;">Press Enter to send · Shift+Enter for new line</div>
+  </div>
+</div>
+
+<!-- FOLLOW-UP MODAL -->
+<div class="modal-overlay" id="followup-modal">
+  <div class="modal" style="width:520px;">
+    <h3>🔁 CREATE FOLLOW-UP TASK</h3>
+    <div style="background:rgba(179,136,255,.08);border:1px solid rgba(179,136,255,.2);border-radius:10px;padding:10px 14px;margin-bottom:18px;font-size:.82rem;color:var(--soft);">
+      Follow-up for: <strong id="followup-parent-title" style="color:var(--purple);"></strong>
+    </div>
+    <input type="hidden" id="followup-parent-id">
+    <label>Follow-up Title *</label>
+    <input type="text" id="followup-title-input" placeholder="e.g. Follow-up: Bugema — router replacement">
+    <label>What needs to be done</label>
+    <textarea id="followup-desc-input" rows="3" placeholder="Describe what still needs to happen..."></textarea>
+    <div class="form-row">
+      <div>
+        <label>Priority</label>
+        <select id="followup-priority-input">
+          <option value="high">🔴 High</option>
+          <option value="medium" selected>🟡 Medium</option>
+          <option value="low">🟢 Low</option>
+        </select>
+      </div>
+      <div>
+        <label>Due Date</label>
+        <input type="text" id="followup-due-input" placeholder="e.g. Apr 15, 2026">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('followup-modal')">Cancel</button>
+      <button class="btn btn-purple btn-sm" onclick="createFollowUp()" id="followup-save-btn">🔁 Create Follow-up Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM COMPLETE MODAL -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal" style="width:420px;text-align:center;">
+    <div style="font-size:2.5rem;margin-bottom:12px;">✅</div>
+    <h3 style="margin-bottom:10px;">MARK AS COMPLETE?</h3>
+    <div id="confirm-task-title" style="color:var(--soft);font-size:.88rem;margin-bottom:6px;font-family:'Inter',sans-serif;line-height:1.5;"></div>
+    <div style="color:var(--muted);font-size:.78rem;margin-bottom:24px;font-family:'Inter',sans-serif;">
+      This will record the completion time and notify the admin.<br>You can undo this from the Completion Report if needed.
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center;">
+      <button class="btn btn-ghost btn-sm" style="min-width:100px;" onclick="closeModal('confirm-modal')">✕ Cancel</button>
+      <button class="btn btn-green btn-sm" style="min-width:140px;" onclick="confirmComplete()">✅ Yes, Mark Complete</button>
+    </div>
+  </div>
+</div>
+
+<!-- COMPLETED REPORT MODAL -->
+<div class="modal-overlay" id="report-modal">
+  <div class="modal" style="width:620px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px;">
+      <h3 style="margin:0;">✅ COMPLETION REPORT</h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('report-modal')">✕ Close</button>
+    </div>
+    <div id="report-body"></div>
+  </div>
+</div>
+
+<!-- STAT MODAL — clickable dashboard cards -->
+<div class="modal-overlay" id="stat-modal">
+  <div class="modal" style="width:580px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <h3 id="stat-modal-title" style="margin:0;"></h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('stat-modal')">✕ Close</button>
+    </div>
+    <div id="stat-modal-body" style="max-height:60vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- INTEL MODAL -->
+<div class="modal-overlay" id="intel-modal">
+  <div class="modal" style="width:500px;">
+    <h3>🔐 POST INTEL</h3>
+    <div style="background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.12);border-radius:10px;padding:10px 14px;margin-bottom:18px;font-size:.78rem;color:var(--muted);">
+      Only visible to admins — never shown to team members
+    </div>
+    <label>Title *</label>
+    <input type="text" id="intel-title-input" placeholder="e.g. New site opportunity — Nakawa Market">
+    <label>Notes</label>
+    <textarea id="intel-note-input" rows="3" placeholder="Add context, observations, or instructions..."></textarea>
+    <label>Link (optional — paste a URL to a report, doc or webpage)</label>
+    <input type="text" id="intel-link-input" placeholder="https://redfincasas.github.io/atubre-taskflow/report.pdf">
+    <label>Attach File (photo, video, PDF)</label>
+    <input type="file" id="intel-file-input" accept="image/*,video/*,.pdf,.doc,.docx" style="display:none" onchange="previewIntelFile()">
+    <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:8px;" onclick="document.getElementById('intel-file-input').click()">
+      📸 Attach Photo / Video / Document
+    </button>
+    <div id="intel-file-preview"></div>
+    <div id="intel-upload-status" style="font-size:.75rem;color:var(--cyan);margin-bottom:8px;"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('intel-modal')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveIntel()" id="intel-save-btn">🔐 Post Intel</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHARE TASK MODAL -->
+<div class="modal-overlay" id="share-modal">
+  <div class="modal" style="width:440px;text-align:center;">
+    <h3 style="margin-bottom:6px;">🔗 SHARE TASK</h3>
+    <div id="share-task-name" style="color:var(--soft);font-size:.85rem;margin-bottom:20px;font-family:'Inter',sans-serif;"></div>
+    <div style="background:var(--card);border-radius:12px;padding:14px;margin-bottom:16px;">
+      <label style="text-align:left;display:block;">Task Link</label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" id="share-url-input" readonly style="margin:0;font-size:.78rem;color:var(--cyan);background:var(--bg);">
+        <button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="copyShareLink()">📋 Copy</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <a id="share-whatsapp-btn" href="" target="_blank" class="btn btn-green btn-sm" style="text-decoration:none;">
+        💬 Share on WhatsApp
+      </a>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('share-modal')">Close</button>
+    </div>
+    <div style="color:var(--muted);font-size:.72rem;margin-top:14px;line-height:1.5;">
+      Recipient must be logged into Atubre Task Flow to view the task
+    </div>
+  </div>
+</div>
+
+<!-- TASK DETAIL MODAL -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal" style="width:560px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <h3 style="margin:0;">TASK DETAILS</h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('detail-modal')">✕ Close</button>
+    </div>
+    <div id="detail-modal-body"></div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <span class="lightbox-close">✕</span>
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+<div id="toast" class="toast"></div>
+<div style="background:#040507;border-top:1px solid rgba(0,229,255,.08);padding:10px 24px;text-align:center;font-size:.68rem;color:#3a5a62;font-family:'Orbitron',sans-serif;letter-spacing:.08em;">© 2026 <span style="color:rgba(0,229,255,.4);">ATUBRE CO. LIMITED</span> · ALL RIGHTS RESERVED · ATUBRE TASK FLOW</div>
+</body>
 </html>
